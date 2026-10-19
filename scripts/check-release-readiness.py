@@ -82,6 +82,7 @@ def main():
             "third_party/blackhole/UPSTREAM.md",
             "Tools/Transaction/main.swift",
             "Tools/Transaction/Uninstaller.swift",
+            "Tools/Transaction/Loopback.swift",
             "scripts/build-native-tools.sh",
         ):
             if prefix + relative not in names:

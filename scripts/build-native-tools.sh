@@ -21,4 +21,9 @@ for ARCH in arm64 x86_64; do
         "$ROOT/Tools/Transaction/Diagnose.swift" \
         -framework CoreAudio \
         -o "$ROOT/.build/native/$ARCH/TapSayAudioDiagnose"
+    xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
+        -module-cache-path "$ROOT/.build/native/module-cache" \
+        "$ROOT/Tools/Transaction/Loopback.swift" \
+        -framework AudioToolbox -framework CoreAudio \
+        -o "$ROOT/.build/native/$ARCH/TapSayAudioLoopback"
 done

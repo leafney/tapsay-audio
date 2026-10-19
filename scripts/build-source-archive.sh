@@ -34,6 +34,8 @@ cp -R "$ROOT/docs/implementation" "$COPYROOT/docs/"
 for ARCH in arm64 x86_64; do
     cp "$ROOT/.build/native/$ARCH/TapSayAudioDiagnose" \
        "$COPYROOT/Tools/Transaction/TapSayAudioDiagnose-$ARCH"
+    cp "$ROOT/.build/native/$ARCH/TapSayAudioLoopback" \
+       "$COPYROOT/Tools/Transaction/TapSayAudioLoopback-$ARCH"
     cp "$ROOT/.build/native/$ARCH/TapSayAudioUninstaller" \
        "$COPYROOT/Uninstaller.app/Contents/MacOS/TapSayAudioUninstaller-$ARCH"
     cp "$ROOT/.build/native/$ARCH/TapSayAudioTransaction" \

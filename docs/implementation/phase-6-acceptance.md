@@ -6,10 +6,12 @@
 ## 已完成的隔离验收
 
 - 增加只读 CoreAudio 诊断工具 `Tools/Transaction/Diagnose.swift`，报告系统可见设备的 UID、名称、transport、输入/输出流、当前采样率和离散支持采样率。
+- 增加 `Tools/Transaction/Loopback.swift`，在目标声卡上同时播放并采集 1 kHz 双声道 Float32 合成 PCM，报告帧数、RMS 和峰值；采集样本只保存在内存、不写文件。
 - 诊断工具以退出码区分 CoreAudio 查询失败、目标设备缺失和设备属性不符合合同，不修改系统路由或设备。
 - HAL 回调测试调用真实 `StartIO`、PCM `WriteMix` 和 `ReadInput` 回调；验证双声道样本保持一致及环形缓冲区末尾回绕。
 - `bash scripts/run-driver-contract-tests.sh`：通过。
-- `bash scripts/build-native-tools.sh`：arm64、x86_64 诊断工具构建成功。
+- `bash scripts/build-native-tools.sh`：arm64、x86_64 诊断与 PCM 环回工具构建成功。
+- Loopback 运行方式：`./.build/native/arm64/TapSayAudioLoopback [16000|44100|48000] [秒数]`。仅在 TapSay Audio 已安装且 CoreAudio 已枚举到设备后运行。
 
 ## 当前机器观测
 
