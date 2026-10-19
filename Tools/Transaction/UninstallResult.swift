@@ -28,7 +28,8 @@ struct UninstallResult: Codable {
 
     static func outcome(driverAbsent: Bool, receiptAbsent: Bool, stateAbsent: Bool,
                         deviceStatus: UninstallDeviceStatus, wasInstalled: Bool,
-                        backupPaths: [String] = []) -> Self {
+                        backupPaths: [String] = [],
+                        cleanup: HistoricalCleanupResult? = nil) -> Self {
         let clean = driverAbsent && receiptAbsent && stateAbsent
         let status: UninstallStatus
         let text: String
@@ -50,9 +51,18 @@ struct UninstallResult: Codable {
             }
         }
         let backups = backupPaths.isEmpty ? "" : "\n\n恢复备份仍保留于：\n" + backupPaths.joined(separator: "\n")
+        let cleanupText: String
+        if let cleanup, [.partial, .blocked, .pendingDeviceRemoval].contains(cleanup.status) {
+            let paths = cleanup.remainingPaths.isEmpty
+                ? cleanup.reasons.joined(separator: "；")
+                : cleanup.remainingPaths.joined(separator: "\n")
+            cleanupText = "\n\n历史清理未全部完成，以下内容已保留：\n" + paths
+        } else {
+            cleanupText = ""
+        }
         return .init(schemaVersion: 1, command: "uninstall", deviceUID: uid, status: status,
                      driverAbsent: driverAbsent, receiptAbsent: receiptAbsent, stateAbsent: stateAbsent,
-                     deviceStatus: deviceStatus, message: text + backups)
+                     deviceStatus: deviceStatus, message: text + backups + cleanupText)
     }
 
     static func failure(_ message: String) -> Self {

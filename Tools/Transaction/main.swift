@@ -4,12 +4,7 @@ import Foundation
 import Darwin
 
 @_silgen_name("flock") func fileLock(_ fd: Int32, _ operation: Int32) -> Int32
-struct Failure: Error, CustomStringConvertible {
-    let description: String
-    init(_ text: String) { description = text }
-}
 let fm = FileManager.default
-func require(_ value: Bool, _ text: String) throws { if !value { throw Failure(text) } }
 func exists(_ url: URL) -> Bool { fm.fileExists(atPath: url.path) }
 func json(_ url: URL) throws -> [String: Any] {
     guard let result = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any] else {
@@ -273,11 +268,14 @@ struct Transaction {
         var report: UninstallResult?
         try withLock {
             try checkState()
+            let transactionRoot = state.deletingLastPathComponent()
+                .appendingPathComponent("transactions")
+            _ = try TransactionRecovery.processPending(
+                transactionRoot: transactionRoot, target: target, state: state,
+                validateDriver: { _ = try validate($0) }
+            )
             let receipt = try receiptExists()
             let wasInstalled = exists(target) || exists(state) || receipt
-            let transactionRoot = state.deletingLastPathComponent().appendingPathComponent("transactions")
-            let retainedBackups = (fm.enumerator(at: transactionRoot, includingPropertiesForKeys: nil)?
-                .allObjects as? [URL] ?? []).filter { $0.lastPathComponent == "backup.driver" && exists($0) }
             if exists(target) { try fm.removeItem(at: target) }
             if receipt {
                 let result = try run("/usr/sbin/pkgutil", ["--forget", field("package_receipt_identifier")])
@@ -293,9 +291,13 @@ struct Transaction {
                 if wasInstalled || before != .absent { _ = activate() }
                 presence = waitForUninstallDeviceRemoval()
             }
+            let cleanup = HistoricalCleanup.clean(
+                transactionRoot: transactionRoot,
+                block: presence != .absent
+            )
             report = UninstallResult.outcome(driverAbsent: driverAbsent, receiptAbsent: receiptAbsent,
                                              stateAbsent: stateAbsent, deviceStatus: presence,
-                                             wasInstalled: wasInstalled, backupPaths: retainedBackups.map(\.path))
+                                             wasInstalled: wasInstalled, cleanup: cleanup)
         }
         guard let report else { throw Failure("未生成卸载结果") }
         return report

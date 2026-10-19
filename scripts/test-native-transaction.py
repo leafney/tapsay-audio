@@ -50,6 +50,8 @@ def main():
     subprocess.run(
         ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
          str(ROOT / "Tools/Transaction/UninstallResult.swift"),
+         str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
+         str(ROOT / "Tools/Transaction/HistoricalCleanup.swift"),
          str(ROOT / "Tools/Transaction/UninstallDeviceCheck.swift"),
          str(ROOT / "Tests/UninstallResultTests.swift"), "-framework", "CoreAudio",
          "-o", str(protocol_test)], check=True,
@@ -58,11 +60,21 @@ def main():
     transaction_test = ROOT / f".build/native/{ARCH}/TransactionRecordTests"
     subprocess.run(
         ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+         str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/TransactionRecord.swift"),
          str(ROOT / "Tests/TransactionRecordTests.swift"),
          "-o", str(transaction_test)], check=True,
     )
     subprocess.run([str(transaction_test)], check=True)
+    history_test = ROOT / f".build/native/{ARCH}/HistoricalCleanupTests"
+    subprocess.run(
+        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+         str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
+         str(ROOT / "Tools/Transaction/HistoricalCleanup.swift"),
+         str(ROOT / "Tests/HistoricalCleanupTests.swift"),
+         "-o", str(history_test)], check=True,
+    )
+    subprocess.run([str(history_test), str(DRIVER)], check=True)
     with tempfile.TemporaryDirectory() as temporary:
         base = Path(temporary).resolve()
         payload = base / "payload/TapSayAudio.driver"
@@ -148,7 +160,6 @@ def main():
         assert pending["terminal_result"] == "deployed"
         run(TOOL, base, metadata, "install", str(payload))
         assert_no_transaction_material(base, target)
-
         # Rolled-back metadata cleanup failure must not move the restored driver again.
         restored_binary = (target / "Contents/MacOS/TapSayAudio").read_bytes()
         run(TOOL, base, metadata, "install", str(payload),
@@ -162,6 +173,14 @@ def main():
         assert pending["terminal_result"] == "rolled_back"
         run(TOOL, base, metadata, "install", str(payload))
         assert_no_transaction_material(base, target)
+        historical = transaction_root(base) / "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE"
+        historical.mkdir(parents=True)
+        shutil.copytree(DRIVER, historical / "backup.driver")
+        (historical / "previous-state.json").write_text(json.dumps({
+            "target": str(target),
+            "bundle_identifier": META["driver"]["bundle_identifier"],
+            "device_uid": META["driver"]["device_uid"],
+        }), encoding="utf-8")
 
         parked = target.with_name("TapSayAudio.parked")
         target.rename(parked)
@@ -190,6 +209,7 @@ def main():
         assert report["status"] == "unverified" and report["deviceStatus"] == "notChecked"
         assert report["driverAbsent"] and report["receiptAbsent"] and report["stateAbsent"]
         assert not target.exists() and not state.exists()
+        assert historical.exists(), "测试环境无法确认设备消失时不得删除历史材料"
         repeated = run(TOOL, base, metadata, "uninstall", "--yes", "--uninstall-report")
         assert json.loads(repeated.stdout)["status"] == "unverified"
         bad = run(TOOL, base, metadata, "--privileged-uninstall", "--uninstall-report", success=False)
