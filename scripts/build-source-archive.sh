@@ -17,6 +17,7 @@ cp -R \
     "$ROOT/Driver" \
     "$ROOT/Uninstaller.app" \
     "$ROOT/Tools" \
+    "$ROOT/Tests" \
     "$ROOT/config" \
     "$ROOT/packaging" \
     "$ROOT/scripts" \

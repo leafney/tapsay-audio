@@ -138,6 +138,12 @@ struct Transaction {
         let second = try? run("/usr/bin/killall", ["coreaudiod"])
         return second?.0 == 0 ? "pending_verification" : "restart_required"
     }
+    func receiptExists() throws -> Bool {
+        if testing { return false }
+        let result = try run("/usr/sbin/pkgutil", ["--pkgs"])
+        try require(result.0 == 0, "无法读取安装收据，不能确认卸载状态：\(result.1)")
+        return result.1.split(whereSeparator: \.isNewline).contains(Substring(field("package_receipt_identifier")))
+    }
     func install(_ payload: URL, failure: String?) throws {
         try preflight(payload)
         try withLock {
@@ -192,12 +198,13 @@ struct Transaction {
             }
         }
     }
-    func uninstall(confirmed: Bool) throws {
+    func uninstall(confirmed: Bool) throws -> UninstallResult {
         try require(confirmed, "卸载需要明确确认：--yes")
+        var report: UninstallResult?
         try withLock {
             try checkState()
-            let receipt = testing ? false : (try run("/usr/sbin/pkgutil", ["--pkg-info", field("package_receipt_identifier")]).0 == 0)
-            if !exists(target) && !exists(state) && !receipt { print("TapSay Audio 未安装"); return }
+            let receipt = try receiptExists()
+            let wasInstalled = exists(target) || exists(state) || receipt
             let transactionRoot = state.deletingLastPathComponent().appendingPathComponent("transactions")
             let retainedBackups = (fm.enumerator(at: transactionRoot, includingPropertiesForKeys: nil)?
                 .allObjects as? [URL] ?? []).filter { $0.lastPathComponent == "backup.driver" && exists($0) }
@@ -207,15 +214,28 @@ struct Transaction {
                 try require(result.0 == 0, "驱动已移除，收据清理失败：\(result.1)")
             }
             if exists(state) { try fm.removeItem(at: state) }
-            let status = activate()
-            let backupMessage = retainedBackups.isEmpty ? "" : "恢复备份保留于：\(retainedBackups.map(\.path).joined(separator: "、"))。"
-            print("驱动文件与收据已清理；\(backupMessage)\(status == "restart_required" ? "需重启 Mac 后生效" : "设备移除待重新枚举确认")；未主动修改系统默认路由。")
+            let driverAbsent = !exists(target), stateAbsent = !exists(state)
+            let receiptAbsent = try !receiptExists()
+            let presence: UninstallDeviceStatus
+            if testing { presence = .notChecked }
+            else {
+                let before = uninstallDeviceStatus()
+                if wasInstalled || before != .absent { _ = activate() }
+                presence = waitForUninstallDeviceRemoval()
+            }
+            report = UninstallResult.outcome(driverAbsent: driverAbsent, receiptAbsent: receiptAbsent,
+                                             stateAbsent: stateAbsent, deviceStatus: presence,
+                                             wasInstalled: wasInstalled, backupPaths: retainedBackups.map(\.path))
         }
+        guard let report else { throw Failure("未生成卸载结果") }
+        return report
     }
 }
 
+let uninstallReportRequested = CommandLine.arguments.contains("--uninstall-report")
 do {
     var args = Array(CommandLine.arguments.dropFirst())
+    args.removeAll { $0 == "--uninstall-report" }
     func option(_ name: String) throws -> String? {
         guard let index = args.firstIndex(of: name) else { return nil }
         try require(index + 1 < args.count, "参数缺少值：\(name)")
@@ -229,16 +249,26 @@ do {
     guard let command = args.first else { throw Failure("用法：TapSayAudioTransaction preflight|install|uninstall [载荷] [--yes]") }
     switch command {
     case "preflight", "install":
+        try require(!uninstallReportRequested, "结构化卸载结果只用于卸载命令")
         try require(args.count == 2, "需要唯一载荷路径")
         let payload = URL(fileURLWithPath: args[1]).standardizedFileURL
         if command == "preflight" { try transaction.preflight(payload) }
         else { try transaction.install(payload, failure: failure) }
     case "uninstall":
         try require(args.count <= 2 && (args.count == 1 || args[1] == "--yes"), "卸载参数异常")
-        try transaction.uninstall(confirmed: args.contains("--yes"))
+        let result = try transaction.uninstall(confirmed: args.contains("--yes"))
+        if uninstallReportRequested {
+            FileHandle.standardOutput.write(try JSONEncoder().encode(result))
+            FileHandle.standardOutput.write(Data([0x0a]))
+        } else { print(result.message) }
+        if result.status == .failed { exit(1) }
     default: throw Failure("未知命令：\(command)")
     }
 } catch {
+    if uninstallReportRequested, let data = try? JSONEncoder().encode(UninstallResult.failure("操作失败：\(error)")) {
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data([0x0a]))
+    }
     fputs("操作失败：\(error)\n", stderr)
     exit(1)
 }

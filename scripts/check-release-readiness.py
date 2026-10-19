@@ -4,9 +4,11 @@
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,7 +68,11 @@ def main():
                 failures.append(f"{arch} PKG 签名检查无法完成")
             image = DIST / f"TapSayAudio-2ch-{VERSION}-{arch}.dmg"
             if image.is_file():
-                verify = run(["/usr/bin/hdiutil", "verify", str(image)])
+                # A mounted older image at this path can make hdiutil report EAGAIN.
+                with tempfile.TemporaryDirectory(prefix="tapsay-image-verify-") as directory:
+                    snapshot = Path(directory) / image.name
+                    shutil.copyfile(image, snapshot)
+                    verify = run(["/usr/bin/hdiutil", "verify", str(snapshot)])
                 if verify.returncode != 0:
                     failures.append(f"{arch} DMG 完整性检查失败")
 
@@ -82,6 +88,9 @@ def main():
             "third_party/blackhole/UPSTREAM.md",
             "Tools/Transaction/main.swift",
             "Tools/Transaction/Uninstaller.swift",
+            "Tools/Transaction/UninstallResult.swift",
+            "Tools/Transaction/UninstallDeviceCheck.swift",
+            "Tests/UninstallResultTests.swift",
             "Tools/Transaction/Diagnose.swift",
             "Tools/Transaction/Loopback.swift",
             "scripts/build-native-tools.sh",

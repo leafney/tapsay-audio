@@ -33,6 +33,15 @@ def run(tool, root, metadata, *args, success=True):
 
 def main():
     assert TOOL.is_file() and DRIVER.is_dir(), "先构建驱动和原生工具"
+    protocol_test = ROOT / f".build/native/{ARCH}/UninstallResultTests"
+    subprocess.run(
+        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+         str(ROOT / "Tools/Transaction/UninstallResult.swift"),
+         str(ROOT / "Tools/Transaction/UninstallDeviceCheck.swift"),
+         str(ROOT / "Tests/UninstallResultTests.swift"), "-framework", "CoreAudio",
+         "-o", str(protocol_test)], check=True,
+    )
+    subprocess.run([str(protocol_test)], check=True)
     with tempfile.TemporaryDirectory() as temporary:
         base = Path(temporary).resolve()
         payload = base / "payload/TapSayAudio.driver"
@@ -68,10 +77,30 @@ def main():
         target.unlink()
         parked.rename(target)
 
-        run(TOOL, base, metadata, "uninstall", "--yes")
+        denied = run(TOOL, base, metadata, "uninstall", "--uninstall-report", success=False)
+        assert json.loads(denied.stdout)["status"] == "failed"
+        assert target.is_dir() and state.is_file(), "缺少卸载确认不得删除"
+        missing = subprocess.run(
+            [str(TOOL), "uninstall", "--yes", "--metadata", str(base / "missing.json"),
+             "--test-root", str(base), "--uninstall-report"], text=True, capture_output=True)
+        assert missing.returncode != 0 and json.loads(missing.stdout)["status"] == "failed"
+        assert target.is_dir() and state.is_file(), "配置读取失败不得删除"
+
+        # Execute exactly the shared argv used by the GUI, without administrator access.
+        arguments = json.loads(subprocess.check_output(
+            [str(protocol_test), "--arguments", str(metadata)], text=True))
+        result = subprocess.run([str(TOOL), *arguments, "--test-root", str(base)],
+                                text=True, capture_output=True)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        report = json.loads(result.stdout)
+        assert report["status"] == "unverified" and report["deviceStatus"] == "notChecked"
+        assert report["driverAbsent"] and report["receiptAbsent"] and report["stateAbsent"]
         assert not target.exists() and not state.exists()
         assert previous.is_dir(), "卸载必须保留唯一恢复备份"
-        run(TOOL, base, metadata, "uninstall", "--yes")
+        repeated = run(TOOL, base, metadata, "uninstall", "--yes", "--uninstall-report")
+        assert json.loads(repeated.stdout)["status"] == "unverified"
+        bad = run(TOOL, base, metadata, "--privileged-uninstall", "--uninstall-report", success=False)
+        assert json.loads(bad.stdout)["status"] == "failed", "旧错误命令不能报告成功"
 
     print("原生安装事务测试通过")
 

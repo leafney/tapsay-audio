@@ -25,7 +25,6 @@ func stop(_ title: String, _ message: String, status: Int32) -> Never {
 }
 @main struct Uninstaller {
 static func main() {
-let args = Array(CommandLine.arguments.dropFirst())
 let app = Bundle.main.bundleURL
 let resources = app.appendingPathComponent("Contents/Resources")
 let arch = hostArchitecture()
@@ -34,16 +33,9 @@ let metadata = resources.appendingPathComponent("product.json")
 guard FileManager.default.isExecutableFile(atPath: tool.path), FileManager.default.fileExists(atPath: metadata.path) else {
     stop("卸载工具不完整", "缺少内置卸载程序或产品信息，请重新下载安装包。", status: 1)
 }
-if args.first == "--privileged-uninstall" {
-    let process = Process()
-    process.executableURL = tool
-    process.arguments = ["uninstall", "--yes", "--metadata", metadata.path]
-    do { try process.run(); process.waitUntilExit(); exit(process.terminationStatus) }
-    catch { stop("卸载失败", String(describing: error), status: 1) }
-}
 NSApplication.shared.setActivationPolicy(.regular)
 NSApplication.shared.activate(ignoringOtherApps: true)
-let summary = "只清理 TapSay Audio 驱动、专属安装状态和安装收据。\n\n操作期间系统音频可能短暂中断。恢复备份会保留。不会修改 TapSay 主程序、其他声卡或系统默认音频设备。"
+let summary = "只清理 TapSay Audio 驱动、专属安装状态和安装收据。\n\n操作期间系统音频可能短暂中断；设备仍被系统保留时，需要手动重新启动 Mac 才能生效。恢复备份会保留。不会修改 TapSay 主程序或其他声卡，不会主动设置系统默认音频设备。"
 guard alert("卸载 TapSay Audio 2ch？", summary, buttons: ["取消", "卸载"]) == NSApplication.ModalResponse.alertSecondButtonReturn.rawValue else { exit(0) }
 var authorization: AuthorizationRef?
 let createStatus = AuthorizationCreate(nil, nil, [], &authorization)
@@ -56,9 +48,9 @@ let status = String(kAuthorizationRightExecute).withCString { rightName -> OSSta
         var rights = AuthorizationRights(count: 1, items: itemPointer)
         let authStatus = AuthorizationCopyRights(authorization, &rights, nil, [.interactionAllowed, .extendRights, .preAuthorize], nil)
         guard authStatus == errAuthorizationSuccess else { return authStatus }
-        let command = strdup("--privileged-uninstall")!
-        defer { free(command) }
-        let argv: [UnsafePointer<CChar>?] = [UnsafePointer(command), nil]
+        let arguments = UninstallResult.arguments(metadata: metadata).map { strdup($0)! }
+        defer { arguments.forEach { free($0) } }
+        let argv: [UnsafePointer<CChar>?] = arguments.map { UnsafePointer($0) } + [nil]
         var pipe: UnsafeMutablePointer<FILE>?
         let executeStatus = tool.path.withCString { path in
             guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "AuthorizationExecuteWithPrivileges") else {
@@ -86,10 +78,12 @@ guard status == errAuthorizationSuccess else {
     if status == errAuthorizationCanceled { exit(0) }
     stop("未获得管理员授权", "未删除任何文件。错误代码：\(status)", status: 1)
 }
-let result = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-if result.contains("操作失败：") || result.contains("恢复") && result.contains("失败") {
-    stop("卸载未完成", result, status: 1)
+let result: UninstallResult
+do { result = try UninstallResult.decode(output) }
+catch {
+    stop("无法确认卸载结果", "未收到有效的卸载结果，不能确认设备已删除。请保留当前驱动状态以便排查，不要将本提示视为卸载成功。", status: 1)
 }
-_ = alert("卸载已执行", result.isEmpty ? "已提交卸载操作；请重新打开音频设置核实设备状态。" : result, buttons: ["好"])
+if result.status == .failed { stop(result.title, result.message, status: 1) }
+_ = alert(result.title, result.message, buttons: ["好"])
 }
 }
