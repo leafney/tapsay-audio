@@ -40,7 +40,7 @@
 
 后续用户已主动运行修复版卸载工具，并明确反馈正常执行。成功窗口显示文件、状态、收据及设备均已移除；代理随后只读核实 HAL 驱动目录与指定收据均已不存在。正常卸载路径已由用户实测，设备消失的本次证据为工具成功窗口，未另行执行独立 UID 复查；授权取消、失败路径和 Intel 真机仍不因此视为通过。
 
-用户另提出清理保留的历史备份；当前事务目录约 84 KB。该新增需求记录在 `docs/discuss/2026-10-19-uninstall-backup-cleanup.md`，尚未批准实现。
+用户另提出清理保留的历史备份；当前事务目录约 84 KB。该新增需求记录在 `docs/discuss/2026-10-19-uninstall-backup-cleanup.md`，后续已批准并按阶段实现，见 `docs/implementation/2026-10-19-install-rollback-cleanup.md`。
 
 实测时先退出使用该设备的音频程序，推出旧版 DMG，打开 `dist/TapSayAudio-2ch-0.1.0-arm64-uninstall-fix.dmg`，运行其中的“卸载 TapSay Audio.app”。无需为更新卸载工具重新安装声卡；旧挂载镜像内的工具不会因磁盘同名 DMG 被重建而自动更新。修复副本散列见 `dist/UNINSTALL-FIX-SHA256SUMS.txt`。
 

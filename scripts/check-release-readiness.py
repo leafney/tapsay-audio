@@ -90,6 +90,12 @@ def main():
             "Tools/Transaction/Uninstaller.swift",
             "Tools/Transaction/UninstallResult.swift",
             "Tools/Transaction/UninstallDeviceCheck.swift",
+            "Tools/Transaction/TransactionSupport.swift",
+            "Tools/Transaction/TransactionRecord.swift",
+            "Tools/Transaction/TransactionRecovery.swift",
+            "Tools/Transaction/HistoricalCleanup.swift",
+            "Tests/TransactionRecordTests.swift",
+            "Tests/HistoricalCleanupTests.swift",
             "Tests/UninstallResultTests.swift",
             "Tools/Transaction/Diagnose.swift",
             "Tools/Transaction/Loopback.swift",
@@ -101,7 +107,7 @@ def main():
     failures.extend(
         [
             "Developer ID 签名及公证未完成",
-            "arm64 升级、降级、卸载、真实遥控器及第三方软件链路未完成（同版重装、收据、备份、三种采样率合成环回及主程序默认格式单声道图已通过）",
+            "arm64 升级、降级、真实卸载清理、真实遥控器及第三方软件链路未完成（同版重装、收据、三种采样率合成环回、隔离回滚与历史清理及主程序默认格式单声道图已通过）",
             "x86_64 Intel 真机验收未完成",
             "GitHub Release 未发布，真实下载地址不存在",
         ]

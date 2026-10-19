@@ -99,6 +99,13 @@ def main():
         require(native_archs == [expected_arch], "PKG 事务工具架构不匹配")
         transaction_source = (ROOT / "Tools/Transaction/main.swift").read_text(encoding="utf-8")
         require("case \"uninstall\"" in transaction_source, "原生事务工具缺少卸载入口")
+        for source in (
+            "Tools/Transaction/TransactionSupport.swift",
+            "Tools/Transaction/TransactionRecord.swift",
+            "Tools/Transaction/TransactionRecovery.swift",
+            "Tools/Transaction/HistoricalCleanup.swift",
+        ):
+            require((ROOT / source).is_file(), f"缺少事务模块源码：{source}")
 
     print(f"PKG 检查通过：{pkg.name} ({expected_arch})")
     return 0
