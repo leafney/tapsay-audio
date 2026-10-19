@@ -12,18 +12,22 @@ struct DeviceReport: Codable {
     var availableRates: [Double]
 }
 
+struct AcceptanceError: Error, CustomStringConvertible {
+    let description: String
+}
+
 func readProperty<T>(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope, as type: T.Type) -> T? {
     var address = AudioObjectPropertyAddress(
         mSelector: selector,
         mScope: scope,
         mElement: kAudioObjectPropertyElementMain
     )
-    var value: T?
+    // CoreAudio writes T, not Optional<T>; scalar optionals have extra tag bytes.
+    let value = UnsafeMutablePointer<T>.allocate(capacity: 1)
+    defer { value.deallocate() }
     var size = UInt32(MemoryLayout<T>.size)
-    let status = withUnsafeMutablePointer(to: &value) { pointer in
-        AudioObjectGetPropertyData(id, &address, 0, nil, &size, pointer)
-    }
-    return status == noErr ? value : nil
+    let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, value)
+    return status == noErr && size == MemoryLayout<T>.size ? value.pointee : nil
 }
 
 func streamCount(_ id: AudioObjectID, _ scope: AudioObjectPropertyScope) -> Int {
@@ -51,7 +55,56 @@ func availableRates(_ id: AudioObjectID) -> [Double] {
     return ranges.filter { $0.mMinimum == $0.mMaximum }.map(\.mMinimum)
 }
 
+func verifyControls(_ device: AudioDeviceID) throws {
+    let system = AudioObjectID(kAudioObjectSystemObject)
+    let routes = [kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice]
+    let originalRoutes = routes.map { readProperty(system, $0, kAudioObjectPropertyScopeGlobal, as: AudioDeviceID.self) }
+    guard originalRoutes.allSatisfy({ $0 != nil }) else {
+        throw AcceptanceError(description: "无法读取系统默认路由")
+    }
+    for scope in [kAudioDevicePropertyScopeInput, kAudioDevicePropertyScopeOutput] {
+        let label = scope == kAudioDevicePropertyScopeInput ? "输入" : "输出"
+        try verifyControl(device, kAudioDevicePropertyMute, scope, initial: UInt32(0), probe: UInt32(1), label: "\(label)静音")
+        try verifyControl(device, kAudioDevicePropertyVolumeScalar, scope, initial: Float32(1), probe: Float32(0.5), label: "\(label)音量")
+    }
+    guard routes.map({ readProperty(system, $0, kAudioObjectPropertyScopeGlobal, as: AudioDeviceID.self) }) == originalRoutes else {
+        throw AcceptanceError(description: "验证前后系统默认路由不同；本工具未设置默认路由")
+    }
+    print("输入、输出、提示音默认路由保持不变")
+}
+
+func verifyControl<T: Equatable>(_ device: AudioDeviceID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope, initial: T, probe: T, label: String) throws {
+    var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+    var settable: DarwinBoolean = false
+    guard AudioObjectIsPropertySettable(device, &address, &settable) == noErr, settable.boolValue,
+          let original = readProperty(device, selector, scope, as: T.self) else {
+        throw AcceptanceError(description: "\(label)不可读写")
+    }
+    func write(_ value: T) throws {
+        var value = value
+        let status = withUnsafePointer(to: &value) {
+            AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<T>.size), $0)
+        }
+        guard status == noErr, readProperty(device, selector, scope, as: T.self) == value else {
+            throw AcceptanceError(description: "\(label)写入或回读失败，状态 \(status)")
+        }
+    }
+    defer {
+        if readProperty(device, selector, scope, as: T.self) != original {
+            do { try write(original) }
+            catch { fputs("警告：恢复\(label)失败：\(error)\n", stderr) }
+        }
+    }
+    try write(probe)
+    try write(original)
+    print("\(label)：初值 \(original)；合同默认值 \(initial)；写入 \(probe) 并回读通过；已恢复 \(original)")
+}
+
 func main() throws {
+    let args = Array(CommandLine.arguments.dropFirst())
+    guard args.isEmpty || args == ["--verify-controls"] else {
+        throw AcceptanceError(description: "用法：TapSayAudioDiagnose [--verify-controls]")
+    }
     let expectedUID = "com.leafney.tapsay.audio.device.2ch"
     var address = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDevices,
@@ -87,10 +140,11 @@ func main() throws {
     let output = try JSONEncoder().encode(reports)
     FileHandle.standardOutput.write(output)
     FileHandle.standardOutput.write(Data([0x0a]))
-    guard let device = reports.first(where: { $0.uid == expectedUID }) else {
+    guard let index = reports.firstIndex(where: { $0.uid == expectedUID }) else {
         fputs("检查失败：CoreAudio 未枚举 TapSay Audio UID\n", stderr)
         exit(2)
     }
+    let device = reports[index]
     guard device.name == "TapSay Audio 2ch",
           device.transport == String(format: "0x%08x", kAudioDeviceTransportTypeUSB),
           device.inputStreamCount == 1,
@@ -102,6 +156,7 @@ func main() throws {
         exit(3)
     }
     print("设备已枚举；音频数据链路尚未验证")
+    if !args.isEmpty { try verifyControls(devices[index]) }
 }
 
 do { try main() }
