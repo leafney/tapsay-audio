@@ -52,7 +52,8 @@
 ## 安装发现的待处理问题
 
 - 安装日志和本项目 `install-state.json` 存在，驱动已就绪且音频环回通过，但沙箱外执行 `pkgutil --pkg-info com.leafney.tapsay.audio.pkg` 提示没有系统收据。
-- 当前 PKG 为 `--nopayload` 仅脚本包，载荷由事务工具部署；需修复系统收据生成，再通过用户启动的覆盖安装复测。不得手工伪造收据或将当前状态写成整个安装生命周期验收通过。
+- 首轮 PKG 为 `--nopayload` 仅脚本包。构建脚本已改为标准空根目录载荷，生成 Payload 和 Bom，实际 HAL 部署仍完全经过事务工具。检查器要求载荷中没有任何文件，防止绕过事务。系统收据生成仍待用户启动同版覆盖安装复测；不得手工伪造收据或将包结构通过写成安装生命周期通过。
+- 两种架构的修正 PKG/DMG 已重建，包结构检查通过；将首次安装的旧 `--nopayload` 包交给新版检查器时，以非零状态拒绝并提示缺少标准空根目录载荷。它验证回归门禁生效，不验证 Installer 实际创建收据。
 
 ## 本机软件条件与主程序依赖
 
@@ -64,6 +65,8 @@
 | TapSay | 0.5.1（2） | 关联仓库白名单尚未加入正式 UID |
 
 只读核对关联仓库 `Sources/TapSay/VirtualAudioOutput.swift`：`supportedUIDs` 仍只有 `MiRemoteV2ch_UID`、`BlackHole2ch_UID`，`supportedNames` 只有相应两个名称。按本 PRD 边界，不修改主程序。真实遥控器链路验收需先由主程序审批接入既定 UID。
+
+本轮尝试通过桌面工具读取 QuickTime，返回 `Sky Computer Use service startup request failed`；再次查询界面清单仍返回同一错误，没有可操作的应用或浏览器。未能进入第三方软件的设备菜单或录音界面，也未据此宣称其设备不可选或录音失败。需要恢复桌面工具或由用户执行专用验收步骤后继续。
 
 ## 尚待真机验收
 

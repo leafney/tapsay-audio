@@ -32,13 +32,14 @@ bash "$ROOT/scripts/build-driver.sh"
 for ARCH in "${ARCHES[@]}"; do
     BUNDLE="$ROOT/.build/driver/$ARCH/Build/Products/Release/$DRIVER_EXECUTABLE.driver"
     SCRIPTS="$OUT/scripts-$ARCH"
+    EMPTY_ROOT="$OUT/empty-root-$ARCH"
     DMGROOT="$OUT/dmg-$ARCH"
     PKG="$OUT/TapSayAudio-2ch-$VERSION.pkg"
     FINAL_PKG="$OUT/TapSayAudio-2ch-$VERSION-$ARCH.pkg"
     FINAL_DMG="$OUT/TapSayAudio-2ch-$VERSION-$ARCH.dmg"
 
-    rm -rf "$SCRIPTS" "$DMGROOT"
-    mkdir -p "$SCRIPTS/package-payload"
+    rm -rf "$SCRIPTS" "$DMGROOT" "$EMPTY_ROOT"
+    mkdir -p "$SCRIPTS/package-payload" "$EMPTY_ROOT"
     cp -R "$BUNDLE" "$SCRIPTS/package-payload/"
     cp "$ROOT/.build/native/$ARCH/TapSayAudioTransaction" "$SCRIPTS/"
     cp "$METADATA" "$SCRIPTS/product.json"
@@ -48,7 +49,7 @@ for ARCH in "${ARCHES[@]}"; do
               "$SCRIPTS/TapSayAudioTransaction"
 
     /usr/bin/pkgbuild \
-        --nopayload \
+        --root "$EMPTY_ROOT" \
         --scripts "$SCRIPTS" \
         --identifier "$RECEIPT" \
         --version "$VERSION" \
@@ -83,7 +84,7 @@ for ARCH in "${ARCHES[@]}"; do
     fi
 
     python3 "$ROOT/scripts/check-package.py" "$FINAL_PKG" "$ARCH"
-    rm -rf "$SCRIPTS" "$DMGROOT"
+    rm -rf "$SCRIPTS" "$DMGROOT" "$EMPTY_ROOT"
 done
 
 bash "$ROOT/scripts/build-source-archive.sh"

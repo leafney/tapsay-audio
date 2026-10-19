@@ -6,7 +6,8 @@
 ## 交付
 
 - arm64、x86_64 分别构建 HAL、原生事务程序、原生卸载界面和 PKG/DMG。
-- PKG 使用 `--nopayload`，由原生事务程序校验身份、主机架构和 Mach-O 载荷后完成备份、替换及失败恢复。
+- PKG 使用 `--root` 指向空目录，生成标准空载荷与 Bom，供 Installer 创建系统收据；实际驱动仍放在脚本资源中，由原生事务程序校验身份、主机架构和 Mach-O 载荷后完成备份、替换及失败恢复。空载荷不能含 HAL 或任何普通文件。
+- 首轮真机安装发现 `--nopayload` 仅脚本包没有生成预期收据，因此修正为上述空根目录包装；新包收据须通过用户主动发起的同版覆盖安装复测，包结构检查不能代替该复测。
 - 每个 DMG 含同名 PKG、对应架构的卸载 APP、中文说明、GPLv3 全文和第三方许可说明。
 - 卸载界面使用 AppKit 显示清理范围和管理员授权；特权操作只调用独立事务程序，不以管理员权限运行界面。
 - 源码归档含驱动、固定上游许可及来源、构建和安装脚本、事务与卸载源码、对应架构开发工具及阶段记录。
@@ -26,21 +27,13 @@
 
 ## 资产
 
-文件大小、SHA-256 以 `dist/SHA256SUMS.txt` 和本记录末尾为准。`dist/` 不纳入 Git；构建命令为 `bash scripts/build-packages.sh`。
-
-| 文件 | 大小 | SHA-256 |
-| --- | ---: | --- |
-| `TapSayAudio-2ch-0.1.0-arm64.pkg` | 63,076 | `b5cc61ab81c5547c500c9a5367fafabf68da8283d3918c432de69b3688a2c9d3` |
-| `TapSayAudio-2ch-0.1.0-x86_64.pkg` | 63,264 | `286bb2f1a5a05d9e3324418604d49642258c5a9fc09095cf812b4ab805dcfc5a` |
-| `TapSayAudio-2ch-0.1.0-arm64.dmg` | 163,000 | `aec4f43c345d72d1e29760244037ac8de347af3307177b8a337147e7b971c121` |
-| `TapSayAudio-2ch-0.1.0-x86_64.dmg` | 163,747 | `4252a1e08119409fee10b1d72739dad1e377292c34212caed5a98566651fe936` |
-| `TapSayAudio-2ch-0.1.0-source.tar.gz` | 见外部校验清单 | 见外部校验清单 |
+文件大小和 SHA-256 以当次构建的 `dist/SHA256SUMS.txt` 和 `dist/RELEASE-READINESS.md` 为准。`dist/` 不纳入 Git；构建命令为 `bash scripts/build-packages.sh`。文档不保留已经被后续构建替代的旧散列。
 
 源码归档的自校验值不能写入归档自身；以同目录 `SHA256SUMS.txt` 及 `RELEASE-READINESS.md` 中记录的最终字节数和 SHA-256 为准。
 
 ## 限制
 
-- 未执行真实 PKG 系统安装/卸载、管理员授权交互、CoreAudio 设备枚举或休眠唤醒验收。
+- arm64 已执行用户主动启动的 PKG 安装、系统授权和 CoreAudio/合成音频验收；收据修正的覆盖安装、真实卸载和休眠唤醒尚待验证，详见阶段 6。
 - 卸载提权入口调用已弃用的 macOS Authorization Execute 接口；当前仅完成编译和静态检查，必须在 macOS 14 真机验证成功、取消和失败反馈，签名发布前应评估迁移到受支持的特权辅助程序机制。
 - 真实遥控器、QuickTime、豆包、微信输入法及第三方设备列表兼容尚未验证。
 - 当前没有 Intel 真机；x86_64 构建和静态检查不能作为 Intel 真机通过证据。

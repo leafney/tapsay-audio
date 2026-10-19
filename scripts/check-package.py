@@ -6,6 +6,7 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -34,6 +35,7 @@ def main():
             stdout=subprocess.DEVNULL,
         )
         package_info = (expanded / "PackageInfo").read_text(encoding="utf-8")
+        package_xml = ET.fromstring(package_info)
         require(
             f'identifier="{DRIVER["package_receipt_identifier"]}"' in package_info,
             "PKG 收据标识不匹配",
@@ -68,7 +70,16 @@ def main():
             require(forbidden not in strings, f"成品包含其他产品标识：{forbidden}")
 
         scripts = expanded / "Scripts"
-        require(not (expanded / "Payload").exists(), "PKG 不应绕过安装事务直接部署 HAL")
+        payload_info = package_xml.find("payload")
+        require(
+            payload_info is not None
+            and payload_info.get("numberOfFiles") == "1"
+            and payload_info.get("installKBytes") == "0",
+            "PKG 必须含空根目录载荷以生成系统收据",
+        )
+        payload = expanded / "Payload"
+        require(payload.is_dir() and not any(payload.iterdir()), "PKG 不能绕过事务写入任何系统文件")
+        require((expanded / "Bom").is_file(), "PKG 缺少系统收据所需 Bom")
         require((scripts / "preinstall").is_file(), "PKG 缺少 preinstall")
         require((scripts / "postinstall").is_file(), "PKG 缺少 postinstall")
         require(
@@ -96,6 +107,6 @@ def main():
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as error:
+    except (KeyError, OSError, ValueError, ET.ParseError, subprocess.CalledProcessError) as error:
         print(f"PKG 检查失败：{error}", file=sys.stderr)
         raise SystemExit(1)

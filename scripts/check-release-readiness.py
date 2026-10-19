@@ -82,6 +82,7 @@ def main():
             "third_party/blackhole/UPSTREAM.md",
             "Tools/Transaction/main.swift",
             "Tools/Transaction/Uninstaller.swift",
+            "Tools/Transaction/Diagnose.swift",
             "Tools/Transaction/Loopback.swift",
             "scripts/build-native-tools.sh",
         ):
@@ -91,7 +92,7 @@ def main():
     failures.extend(
         [
             "Developer ID 签名及公证未完成",
-            "arm64 系统安装、CoreAudio 和第三方软件链路未完成",
+            "arm64 安装生命周期、PKG 收据复测及第三方软件链路未完成（设备属性及三种采样率合成环回已通过）",
             "x86_64 Intel 真机验收未完成",
             "GitHub Release 未发布，真实下载地址不存在",
         ]
