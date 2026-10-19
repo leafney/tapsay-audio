@@ -8,6 +8,8 @@ for ARCH in arm64 x86_64; do
     xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
         -module-cache-path "$ROOT/.build/native/module-cache" \
         "$ROOT/Tools/Transaction/Architecture.swift" \
+        "$ROOT/Tools/Transaction/TransactionRecord.swift" \
+        "$ROOT/Tools/Transaction/TransactionRecovery.swift" \
         "$ROOT/Tools/Transaction/UninstallResult.swift" \
         "$ROOT/Tools/Transaction/UninstallDeviceCheck.swift" \
         "$ROOT/Tools/Transaction/main.swift" \

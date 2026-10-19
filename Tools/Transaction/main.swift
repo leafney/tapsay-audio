@@ -148,51 +148,121 @@ struct Transaction {
         try preflight(payload)
         try withLock {
             try preflight(payload)
+            let pending = try TransactionRecovery.processPending(
+                transactionRoot: state.deletingLastPathComponent().appendingPathComponent("transactions"),
+                target: target, state: state, validateDriver: { _ = try validate($0) },
+                injectCleanupFailure: failure == "pending-cleanup"
+            )
+            pending.messages.forEach { print($0) }
             let hadTarget = exists(target)
             let previousState = exists(state) ? try Data(contentsOf: state) : nil
-            let transaction = state.deletingLastPathComponent().appendingPathComponent("transactions/\(UUID().uuidString)")
-            let backup = transaction.appendingPathComponent("backup.driver")
-            let staged = target.deletingLastPathComponent().appendingPathComponent(".TapSayAudio-\(UUID().uuidString).driver")
-            let previous = target.deletingLastPathComponent().appendingPathComponent(".TapSayAudio-\(UUID().uuidString).previous")
+            let transactionID = UUID().uuidString
+            let transaction = state.deletingLastPathComponent()
+                .appendingPathComponent("transactions/\(transactionID)")
+            let staged = target.deletingLastPathComponent()
+                .appendingPathComponent(".TapSayAudio-\(transactionID).driver")
+            let previous = target.deletingLastPathComponent()
+                .appendingPathComponent(".TapSayAudio-\(transactionID).previous")
+            let previousStateURL = transaction.appendingPathComponent("previous-state.json")
+            var record = TransactionRecord(
+                transactionID: transactionID, deviceUID: field("device_uid"),
+                bundleIdentifier: field("bundle_identifier"),
+                receipt: field("package_receipt_identifier"), target: target.path,
+                state: state.path, previous: hadTarget ? previous.path : "",
+                staged: staged.path, previousState: hadTarget && previousState != nil
+                    ? previousStateURL.path : "", hadTarget: hadTarget
+            )
             try rejectLinks(transaction)
             try fm.createDirectory(at: transaction, withIntermediateDirectories: true)
-            if failure == "backup" { throw Failure("注入备份失败；未更改原驱动") }
-            if hadTarget { try fm.copyItem(at: target, to: backup); _ = try validate(backup) }
-            if let previousState { try previousState.write(to: transaction.appendingPathComponent("previous-state.json")) }
+            try record.write(to: transaction)
+            try TransactionRecovery.validateRecordAfterWrite(record: record, directory: transaction)
+            if let previousState, hadTarget {
+                try previousState.write(to: previousStateURL, options: .atomic)
+                try require(try Data(contentsOf: previousStateURL) == previousState,
+                            "旧状态副本回读不一致")
+            }
+            if failure == "backup" {
+                try TransactionRecovery.cleanPrepared(
+                    record: record, directory: transaction, injectCleanupFailure: false
+                )
+                throw Failure("注入备份失败；未更改原驱动")
+            }
             try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             var moved = false, deployed = false
-            defer { try? fm.removeItem(at: staged) }
             do {
                 try fm.copyItem(at: payload, to: staged)
                 _ = try validate(staged, package: true)
                 if failure == "staged" { throw Failure("注入部署前失败") }
-                if hadTarget { try move(target, previous); moved = true }
-                try move(staged, target); deployed = true
-                if failure == "deployed" || failure == "rollback" { throw Failure("注入部署后失败") }
+                record = try record.updating(phase: .replacing, terminal: .active,
+                                             terminalResult: TransactionTerminalResult.none,
+                                             cleanup: TransactionCleanup.none,
+                                             cleanupRemainingPaths: [], cleanupReason: "")
+                try record.write(to: transaction)
+                try TransactionRecovery.validateRecordAfterWrite(record: record, directory: transaction)
+                if failure == "move" { throw Failure("注入移动前失败") }
+                if hadTarget {
+                    try move(target, previous)
+                    moved = true
+                }
+                try move(staged, target)
+                deployed = true
+                record = try record.updating(phase: .validating, terminal: .active,
+                                             terminalResult: TransactionTerminalResult.none,
+                                             cleanup: TransactionCleanup.none,
+                                             cleanupRemainingPaths: [], cleanupReason: "")
+                try record.write(to: transaction)
+                try TransactionRecovery.validateRecordAfterWrite(record: record, directory: transaction)
+                if ["deployed", "rollback", "cleanup-rollback"].contains(failure) {
+                    throw Failure("注入部署后失败")
+                }
                 _ = try validate(target, package: true)
+                if failure == "state-write" { throw Failure("注入状态写入前失败") }
                 var result: [String: Any] = [
                     "product": "TapSay Audio", "version": product["version"]!, "build_number": product["build_number"]!,
                     "architecture": hostArchitecture(), "target": target.path,
                     "bundle_identifier": field("bundle_identifier"), "device_uid": field("device_uid"),
                     "receipt": field("package_receipt_identifier"), "transaction": transaction.path,
-                    "backup": hadTarget ? backup.path : NSNull(), "installed_at": ISO8601DateFormatter().string(from: Date()),
+                    "installed_at": ISO8601DateFormatter().string(from: Date()),
                     "verification_status": "not_run", "audio_chain_status": "not_run"
                 ]
                 result["activation_status"] = activate()
                 try writeJSON(result, state)
-                if moved { try? fm.removeItem(at: previous) }
+                record = try record.updating(phase: .committed, terminal: .success,
+                                             terminalResult: .deployed, cleanup: .pending,
+                                             cleanupRemainingPaths: [], cleanupReason: "")
+                try record.write(to: transaction)
+                try TransactionRecovery.validateRecordAfterWrite(record: record, directory: transaction)
+                do {
+                    try TransactionRecovery.cleanupCommitted(
+                        record: record, directory: transaction,
+                        injectFailure: failure == "cleanup"
+                    )
+                } catch {
+                    if exists(transaction) {
+                        try TransactionRecovery.recordCleanupFailure(
+                            record: record, directory: transaction, error: error
+                        )
+                    }
+                    throw Failure("新版本已部署，但本次临时材料清理未完成；请重新运行安装或卸载工具清理：\(error)")
+                }
                 print("驱动文件已部署；设备就绪待核验，真实音频链路未验证。\(result["activation_status"]!)")
             } catch {
-                do {
-                    if failure == "rollback" { throw Failure("注入恢复失败") }
-                    if deployed { try fm.removeItem(at: target) }
-                    if moved { try move(previous, target); _ = try validate(target) }
-                    if let previousState { try previousState.write(to: state, options: .atomic) }
-                    else if exists(state) { try fm.removeItem(at: state) }
+                if record.phase == .committed {
+                    throw error
+                }
+                if !moved && !deployed && record.phase == .prepared {
+                    try TransactionRecovery.cleanPrepared(
+                        record: record, directory: transaction,
+                        injectCleanupFailure: failure == "cleanup-rollback"
+                    )
+                } else {
+                    try TransactionRecovery.recoverAfterInstallFailure(
+                        record: record, directory: transaction, target: target, state: state,
+                        validateDriver: { _ = try validate($0) },
+                        forceFailure: failure == "rollback",
+                        injectCleanupFailure: failure == "cleanup-rollback"
+                    )
                     if !testing && deployed { _ = activate() }
-                } catch {
-                    print("恢复失败，保留备份：\(backup.path)，原目录：\(previous.path)；请勿删除。原因：\(error)")
-                    throw Failure("安装失败且恢复未完成；需要人工恢复")
                 }
                 throw Failure("部署失败，\(hadTarget ? "已恢复安装前版本" : "已清理本次载荷")：\(error)")
             }

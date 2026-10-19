@@ -31,6 +31,19 @@ def run(tool, root, metadata, *args, success=True):
     return result
 
 
+def transaction_root(root):
+    return root / "Library/Application Support/TapSay Audio/transactions"
+
+
+def assert_no_transaction_material(root, target):
+    transactions = transaction_root(root)
+    assert not transactions.exists() or not any(transactions.iterdir()), "安装成功后不得遗留事务目录"
+    assert not [
+        item for item in target.parent.iterdir()
+        if item.name.startswith(".TapSayAudio-")
+    ], "安装成功后不得遗留本次临时驱动"
+
+
 def main():
     assert TOOL.is_file() and DRIVER.is_dir(), "先构建驱动和原生工具"
     protocol_test = ROOT / f".build/native/{ARCH}/UninstallResultTests"
@@ -42,6 +55,14 @@ def main():
          "-o", str(protocol_test)], check=True,
     )
     subprocess.run([str(protocol_test)], check=True)
+    transaction_test = ROOT / f".build/native/{ARCH}/TransactionRecordTests"
+    subprocess.run(
+        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+         str(ROOT / "Tools/Transaction/TransactionRecord.swift"),
+         str(ROOT / "Tests/TransactionRecordTests.swift"),
+         "-o", str(transaction_test)], check=True,
+    )
+    subprocess.run([str(transaction_test)], check=True)
     with tempfile.TemporaryDirectory() as temporary:
         base = Path(temporary).resolve()
         payload = base / "payload/TapSayAudio.driver"
@@ -53,21 +74,94 @@ def main():
         state = base / "Library/Application Support/TapSay Audio/install-state.json"
 
         run(TOOL, base, metadata, "install", str(payload))
+        assert_no_transaction_material(base, target)
+        assert not (transaction_root(base) / "backup.driver").exists()
         original_binary = (target / "Contents/MacOS/TapSayAudio").read_bytes()
         original_state = json.loads(state.read_text())
         assert original_state["verification_status"] == "not_run"
+        assert "backup" not in original_state
 
         run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "backup", success=False)
         assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
         assert json.loads(state.read_text()) == original_state
+        assert_no_transaction_material(base, target)
 
         run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "deployed", success=False)
         assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
         assert json.loads(state.read_text()) == original_state
+        assert_no_transaction_material(base, target)
+
+        run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "state-write", success=False)
+        assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
+        assert json.loads(state.read_text()) == original_state
+        assert_no_transaction_material(base, target)
+
+        run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "move", success=False)
+        assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
+        assert json.loads(state.read_text()) == original_state
+        assert_no_transaction_material(base, target)
 
         run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "rollback", success=False)
-        previous = target.with_name(next(name for name in os.listdir(target.parent) if name.startswith(".TapSayAudio-") and name.endswith(".previous")))
+        previous = target.with_name(next(
+            name for name in os.listdir(target.parent)
+            if name.startswith(".TapSayAudio-") and name.endswith(".previous")
+        ))
         assert previous.is_dir() and (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
+        records = list(transaction_root(base).glob("*/transaction.json"))
+        assert len(records) == 1, "恢复失败必须保留唯一事务记录"
+        record = json.loads(records[0].read_text())
+        assert record["phase"] == "recovery_required"
+        assert record["terminal"] == "recovery_required"
+        blocked = run(TOOL, base, metadata, "install", str(payload), success=False)
+        assert "待人工恢复" in blocked.stderr
+        assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == original_binary
+
+        # Simulate an abnormal exit after the old driver moved but before deployment.
+        shutil.rmtree(previous)
+        target.rename(previous)
+        record["phase"] = "replacing"
+        record["terminal"] = "active"
+        record["terminal_result"] = "none"
+        record["cleanup"] = "none"
+        record["cleanup_remaining_paths"] = []
+        record["cleanup_reason"] = ""
+        records[0].write_text(json.dumps(record), encoding="utf-8")
+        run(TOOL, base, metadata, "install", str(payload))
+        assert target.is_dir()
+        assert_no_transaction_material(base, target)
+
+        # A committed install must not roll back merely because temporary cleanup fails.
+        deployed_binary = (target / "Contents/MacOS/TapSayAudio").read_bytes()
+        deployed_state = json.loads(state.read_text())
+        deployed_version = deployed_state["version"]
+        run(TOOL, base, metadata, "install", str(payload), "--inject-failure", "cleanup", success=False)
+        assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == deployed_binary
+        after_cleanup_failure = json.loads(state.read_text())
+        assert after_cleanup_failure["version"] == deployed_version
+        assert after_cleanup_failure["target"] == deployed_state["target"]
+        assert after_cleanup_failure["device_uid"] == deployed_state["device_uid"]
+        pending_records = list(transaction_root(base).glob("*/transaction.json"))
+        assert len(pending_records) == 1, "提交后清理失败必须保留事务记录"
+        pending = json.loads(pending_records[0].read_text())
+        assert pending["phase"] == "committed"
+        assert pending["terminal"] == "cleanup_pending"
+        assert pending["terminal_result"] == "deployed"
+        run(TOOL, base, metadata, "install", str(payload))
+        assert_no_transaction_material(base, target)
+
+        # Rolled-back metadata cleanup failure must not move the restored driver again.
+        restored_binary = (target / "Contents/MacOS/TapSayAudio").read_bytes()
+        run(TOOL, base, metadata, "install", str(payload),
+            "--inject-failure", "cleanup-rollback", success=False)
+        assert (target / "Contents/MacOS/TapSayAudio").read_bytes() == restored_binary
+        pending_records = list(transaction_root(base).glob("*/transaction.json"))
+        assert len(pending_records) == 1, "回滚后清理失败必须保留事务记录"
+        pending = json.loads(pending_records[0].read_text())
+        assert pending["phase"] == "rolled_back"
+        assert pending["terminal"] == "cleanup_pending"
+        assert pending["terminal_result"] == "rolled_back"
+        run(TOOL, base, metadata, "install", str(payload))
+        assert_no_transaction_material(base, target)
 
         parked = target.with_name("TapSayAudio.parked")
         target.rename(parked)
@@ -96,7 +190,6 @@ def main():
         assert report["status"] == "unverified" and report["deviceStatus"] == "notChecked"
         assert report["driverAbsent"] and report["receiptAbsent"] and report["stateAbsent"]
         assert not target.exists() and not state.exists()
-        assert previous.is_dir(), "卸载必须保留唯一恢复备份"
         repeated = run(TOOL, base, metadata, "uninstall", "--yes", "--uninstall-report")
         assert json.loads(repeated.stdout)["status"] == "unverified"
         bad = run(TOOL, base, metadata, "--privileged-uninstall", "--uninstall-report", success=False)
