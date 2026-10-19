@@ -8,4 +8,6 @@
 
 验证：`python3 scripts/test-install-transaction.py` 通过，覆盖错误架构拒绝且原文件不变，部署故障注入后原文件恢复，未确认卸载拒绝，确认卸载只删除目标。
 
+阶段 5 已将交付安装流程迁移到 `Tools/Transaction/main.swift` 原生事务程序，以免最终 PKG 依赖系统 Python。上列 Python 脚本是阶段 3 历史实现，现已删除；最终行为以阶段 5 的原生实现及隔离验收为准。
+
 未覆盖：PKG 图形授权、真实 `/Library/Audio/Plug-Ins/HAL` 安装、CoreAudio 重枚举、系统重启和真实音频链路。下一阶段包装器会调用这些受限脚本；正式系统操作仍需 Apple Silicon 真机人工验收。

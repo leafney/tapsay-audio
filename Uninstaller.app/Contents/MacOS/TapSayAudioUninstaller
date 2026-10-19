@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../../../../" && pwd)"
-TARGET="${TAPSAY_AUDIO_TARGET:-/Library/Audio/Plug-Ins/HAL/TapSayAudio.driver}"
-STATE="${TAPSAY_AUDIO_STATE:-/Library/Application Support/TapSay Audio/install-state.json}"
-MESSAGE="将卸载 TapSay Audio 2ch。\n\n仅清理：\n$TARGET\n$STATE\n\n不会修改 TapSay、其他声卡或系统默认音频设备。"
-if ! /usr/bin/osascript -e "display dialog \"$MESSAGE\" with title \"卸载 TapSay Audio\" buttons {\"取消\", \"卸载\"} default button \"取消\" with icon caution" >/dev/null; then exit 0; fi
-exec /usr/bin/python3 "$ROOT/scripts/uninstall.py" --target "$TARGET" --state "$STATE" --yes
+CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" == "1" ]]; then
+    ARCH="arm64"
+else
+    ARCH="$(/usr/bin/uname -m)"
+fi
+exec "$CONTENTS/MacOS/TapSayAudioUninstaller-$ARCH" "$@"

@@ -45,6 +45,6 @@
     "commit": "e2b22aaaba4e507a097131704bf96dabc004d9cf",
     "archive_sha256": "5d523d51165873ee339bfb670694de61ad2ce84a0c72a6df32dbb283313f26b0",
     "license": "GPL-3.0",
-    "source_import_status": "reviewed archive; source integration is phase 2"
+    "source_import_status": "integrated from fixed upstream commit; final distribution review pending"
   }
 }
