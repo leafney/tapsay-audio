@@ -156,12 +156,53 @@ static void check_control_defaults(void)
     assert(input_mute == 0);
 }
 
+static void check_pcm_ring_buffer_round_trip(void)
+{
+    assert(TapSayAudio_StartIO(gAudioServerPlugInDriverRef, kObjectID_Device, 1) == noErr);
+    const UInt32 frames = 4;
+    Float32 input[frames * kNumber_Of_Channels] = {
+        0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f, 0.4f, -0.4f
+    };
+    Float32 output[frames * kNumber_Of_Channels] = { 0 };
+    AudioServerPlugInIOCycleInfo cycle = { 0 };
+    cycle.mCurrentTime.mSampleTime = 0;
+    cycle.mOutputTime.mSampleTime = 0;
+    assert(TapSayAudio_DoIOOperation(
+        gAudioServerPlugInDriverRef, kObjectID_Device, kObjectID_Stream_Output,
+        0, kAudioServerPlugInIOOperationWriteMix, frames, &cycle, input, NULL
+    ) == noErr);
+
+    cycle.mInputTime.mSampleTime = 0;
+    assert(TapSayAudio_DoIOOperation(
+        gAudioServerPlugInDriverRef, kObjectID_Device, kObjectID_Stream_Input,
+        0, kAudioServerPlugInIOOperationReadInput, frames, &cycle, output, NULL
+    ) == noErr);
+    assert(memcmp(input, output, sizeof(input)) == 0);
+
+    const UInt64 wrap_start = kRing_Buffer_Frame_Size - 2;
+    cycle.mCurrentTime.mSampleTime = wrap_start;
+    cycle.mOutputTime.mSampleTime = wrap_start;
+    assert(TapSayAudio_DoIOOperation(
+        gAudioServerPlugInDriverRef, kObjectID_Device, kObjectID_Stream_Output,
+        0, kAudioServerPlugInIOOperationWriteMix, frames, &cycle, input, NULL
+    ) == noErr);
+    cycle.mInputTime.mSampleTime = wrap_start;
+    memset(output, 0, sizeof(output));
+    assert(TapSayAudio_DoIOOperation(
+        gAudioServerPlugInDriverRef, kObjectID_Device, kObjectID_Stream_Input,
+        0, kAudioServerPlugInIOOperationReadInput, frames, &cycle, output, NULL
+    ) == noErr);
+    assert(memcmp(input, output, sizeof(input)) == 0);
+    assert(TapSayAudio_StopIO(gAudioServerPlugInDriverRef, kObjectID_Device, 1) == noErr);
+}
+
 int main(void)
 {
     check_identity_and_enumeration();
     check_transport_and_default_rate();
     check_supported_formats();
     check_control_defaults();
+    check_pcm_ring_buffer_round_trip();
     puts("TapSay Audio HAL contract checks passed");
     return 0;
 }
