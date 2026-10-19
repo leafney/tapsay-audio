@@ -333,7 +333,9 @@ do {
             FileHandle.standardOutput.write(try JSONEncoder().encode(result))
             FileHandle.standardOutput.write(Data([0x0a]))
         } else { print(result.message) }
-        if result.status == .failed { exit(1) }
+        if result.status == .failed || [.partial, .blocked].contains(result.cleanupStatus) {
+            exit(result.status == .failed ? 1 : 2)
+        }
     default: throw Failure("未知命令：\(command)")
     }
 } catch {

@@ -35,7 +35,7 @@ guard FileManager.default.isExecutableFile(atPath: tool.path), FileManager.defau
 }
 NSApplication.shared.setActivationPolicy(.regular)
 NSApplication.shared.activate(ignoringOtherApps: true)
-let summary = "只清理 TapSay Audio 驱动、专属安装状态和安装收据。\n\n操作期间系统音频可能短暂中断；设备仍被系统保留时，需要手动重新启动 Mac 才能生效。恢复备份会保留。不会修改 TapSay 主程序或其他声卡，不会主动设置系统默认音频设备。"
+let summary = "只清理 TapSay Audio 驱动、专属安装状态、安装收据和可安全确认归属的历史安装材料。\n\n操作期间系统音频可能短暂中断；设备仍被系统保留时，需要手动重新启动 Mac 才能生效。不会修改 TapSay 主程序或其他声卡，不会主动设置系统默认音频设备。无法确认归属或仍待恢复的材料会保留。"
 guard alert("卸载 TapSay Audio 2ch？", summary, buttons: ["取消", "卸载"]) == NSApplication.ModalResponse.alertSecondButtonReturn.rawValue else { exit(0) }
 var authorization: AuthorizationRef?
 let createStatus = AuthorizationCreate(nil, nil, [], &authorization)

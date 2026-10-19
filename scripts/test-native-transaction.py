@@ -208,6 +208,8 @@ def main():
         report = json.loads(result.stdout)
         assert report["status"] == "unverified" and report["deviceStatus"] == "notChecked"
         assert report["driverAbsent"] and report["receiptAbsent"] and report["stateAbsent"]
+        assert report["schemaVersion"] == 2
+        assert report["cleanupStatus"] == "pendingDeviceRemoval"
         assert not target.exists() and not state.exists()
         assert historical.exists(), "测试环境无法确认设备消失时不得删除历史材料"
         repeated = run(TOOL, base, metadata, "uninstall", "--yes", "--uninstall-report")
