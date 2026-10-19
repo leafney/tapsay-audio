@@ -27,6 +27,7 @@ def main() -> int:
     require(data["schema_version"] == 1, "Unsupported metadata schema_version")
     require(product["name"] == "TapSay Audio", "Unexpected product name")
     require(product["version"] == "0.1.0", "Unexpected initial product version")
+    require(product["build_number"] == "1", "Unexpected initial build number")
     require(product["minimum_macos"] == "14.0", "Unexpected minimum macOS version")
     require(
         product["architectures"] == ["arm64", "x86_64"],

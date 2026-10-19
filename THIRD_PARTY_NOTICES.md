@@ -9,7 +9,7 @@
 - 许可证：GNU General Public License，第 3 版。
 - 固定基线：`v0.7.1`，提交 `e2b22aaaba4e507a097131704bf96dabc004d9cf`，已由 PRD 批准用于实现。
 - 固定版本许可：https://github.com/ExistentialAudio/BlackHole/blob/e2b22aaaba4e507a097131704bf96dabc004d9cf/LICENSE
-- 当前状态：已下载并核验固定提交的源码归档；阶段 1 固定来源和许可记录，驱动源码按阶段 2 交付前仍须完成逐文件审查。
+- 当前状态：已下载并核验固定提交的源码归档；阶段 2 正在引入经审查的派生驱动文件，正式分发审查仍须覆盖最终载荷和对应源码。
 
 ### 2026-10-19 材料核查
 
@@ -42,3 +42,5 @@
 5. 发行安装包时，按 GPL 第 3 版要求提供对应源码，包括必要的构建和安装脚本，并记录二进制与源码版本的对应关系。
 
 本项目的名称和设备标识应独立设置；上游许可证不应被当作上游品牌资产的额外授权。
+
+派生文件清单、2026-10-19 修改记录及已处理的上游风险见 [`third_party/blackhole/UPSTREAM.md`](third_party/blackhole/UPSTREAM.md)。

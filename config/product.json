@@ -4,6 +4,7 @@
     "name": "TapSay Audio",
     "repository": "tapsay-audio",
     "version": "0.1.0",
+    "build_number": "1",
     "minimum_macos": "14.0",
     "architectures": [
       "arm64",
