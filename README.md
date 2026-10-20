@@ -68,6 +68,11 @@ bash scripts/build-driver.sh reference-16k
 这些命令只构建驱动，不安装到系统；不得将实验产物复制进正式发行包。
 profile 构建必须使用命令中明确指定的名称，不支持的名称会报错退出。
 
+需要单独准备安装验收包时，先构建原生事务工具和对应 profile 驱动，再显式指定 profile
+与架构运行 `bash scripts/build-experiment-package.sh reference-48k arm64`。
+实验包、包散列和实验清单位于 `.build/experiments/` 的提交隔离目录；
+包校验必须显式传入同一 profile。该脚本只生成未签名实验包，不执行安装。
+
 ## 设备与发行标识
 
 以下为已确认且已写入驱动、安装包和卸载工具的标识合同；arm64 已核实实际设备 UID、名称和驱动版本，
