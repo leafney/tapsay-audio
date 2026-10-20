@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate the product identity contract before building release artifacts."""
 
+import argparse
 import json
 import re
 import sys
@@ -18,6 +19,9 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--profile", choices=("reference-48k", "reference-16k"))
+    args = parser.parse_args()
     data = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
     product = data["product"]
     driver = data["driver"]
@@ -51,19 +55,77 @@ def main() -> int:
         "Unexpected uninstaller bundle identifier",
     )
     require(driver["channels"] == 2, "The device must expose exactly two channels")
-    require(
-        driver["sample_rates_hz"] == [16000, 44100, 48000],
-        "Unexpected supported sample rates",
-    )
-    require(
-        driver["default_sample_rate_hz"] == 16000,
-        "The default sample rate must be 16000 Hz",
-    )
-    require(driver["transport_type"] == "usb", "Unexpected transport type")
-    require(
-        driver["hidden_device_uids"] == [],
-        "TapSay must not publish hidden audio devices",
-    )
+    if args.profile is None:
+        require(
+            driver["sample_rates_hz"] == [16000, 44100, 48000],
+            "Unexpected supported sample rates",
+        )
+        require(
+            driver["default_sample_rate_hz"] == 16000,
+            "The default sample rate must be 16000 Hz",
+        )
+        require(driver["transport_type"] == "usb", "Unexpected transport type")
+        require(
+            driver["hidden_device_uids"] == [],
+            "TapSay must not publish hidden audio devices",
+        )
+    else:
+        profile_path = ROOT / "config" / "driver-profiles.json"
+        profiles = json.loads(profile_path.read_text(encoding="utf-8"))
+        rates = profiles["sample_rates_hz"]
+        require(
+            rates == [8000, 16000, 24000, 44100, 48000, 88200, 96000,
+                      176400, 192000, 352800, 384000, 705600, 768000],
+            "Reference sample-rate list must match the ordered upstream list",
+        )
+        require(
+            set(profiles["profiles"]) == {"reference-48k", "reference-16k"},
+            "Unexpected reference profiles",
+        )
+        require(
+            all(set(profile) == {"default_sample_rate_hz"} for profile in profiles["profiles"].values()),
+            "Profiles may differ only by default_sample_rate_hz",
+        )
+        require(
+            profiles["profiles"]["reference-48k"]["default_sample_rate_hz"] == 48000,
+            "reference-48k must default to 48000 Hz",
+        )
+        require(
+            profiles["profiles"]["reference-16k"]["default_sample_rate_hz"] == 16000,
+            "reference-16k must default to 16000 Hz",
+        )
+        require(
+            profiles["profiles"]["reference-48k"] != profiles["profiles"]["reference-16k"],
+            "Reference profiles must differ by their default sample rate",
+        )
+        require(profiles["device"]["channels"] == 2, "Reference device must be stereo")
+        require(profiles["device"]["hidden"] is False, "Primary device must be visible")
+        require(profiles["device"]["has_input"] and profiles["device"]["has_output"],
+                "Primary device must expose input and output")
+        require(profiles["device"]["transport"] == "usb", "Device transport must be USB")
+        require(profiles["box_transport"] == "virtual", "Box transport must be Virtual")
+        require(profiles["latency_frame_size"] == 0, "Latency must remain zero")
+        require(profiles["device_ring_buffer_size"] == 16384,
+                "Device ring-buffer period must match upstream")
+        require(profiles["ring_buffer_frame_size"] == 65536,
+                "Ring-buffer frame count must match upstream")
+        require(profiles["device2"]["hidden"] is True, "Second device must remain hidden")
+        require(profiles["device2"]["uid"] == "com.leafney.tapsay.audio.device.2ch.2",
+                "Unexpected hidden device UID")
+        require(profiles["device2"]["name"] == "TapSay Audio 2ch 2",
+                "Unexpected hidden device name")
+        require(profiles["device2"]["has_input"] and profiles["device2"]["has_output"],
+                "Hidden device must expose input and output")
+        identities = [
+            driver["device_uid"], profiles["device2"]["uid"],
+            driver["box_uid"], driver["model_uid"],
+            driver["bundle_identifier"], driver["package_receipt_identifier"],
+        ]
+        require(len(identities) == len(set(identities)), "Profile identities collide")
+        require(
+            profiles["device2"]["uid"].startswith("com.leafney.tapsay.audio."),
+            "Hidden device UID must use the TapSay namespace",
+        )
 
     factory_uuid = str(uuid.UUID(driver["plugin_factory_uuid"])).upper()
     require(
@@ -97,7 +159,8 @@ def main() -> int:
         uninstaller["bundle_identifier"],
     ]
     require(len(identities) == len(set(identities)), "Product identifiers collide")
-    print(f"Metadata valid: {METADATA_PATH.relative_to(ROOT)}")
+    label = f" ({args.profile})" if args.profile else ""
+    print(f"Metadata valid{label}: {METADATA_PATH.relative_to(ROOT)}")
     return 0
 
 

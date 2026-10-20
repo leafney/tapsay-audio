@@ -49,6 +49,25 @@ TapSay 主程序当前产生的是 16 kHz 单声道浮点音频，这与虚拟�
 主程序在 44.1/48 kHz 设备格式下的转换、真实遥控器及第三方软件接收效果仍需验证；
 仅看到设备名称或成功启动音频引擎不算完整验收。
 
+## 参考配置实验
+
+`reference-48k` 和 `reference-16k` 是无线麦驱动配置对照实验，不属于正式发行配置。
+两者使用完整上游采样率列表和隐藏第二设备；TapSay 的正式身份保持独立。
+16 kHz profile 仅将驱动初始采样率从 48 kHz 改为 16 kHz。
+
+```sh
+bash scripts/run-driver-contract-tests.sh reference-48k
+bash scripts/build-driver.sh reference-48k
+bash scripts/run-driver-contract-tests.sh reference-16k
+bash scripts/build-driver.sh reference-16k
+```
+
+构建输出分别位于 `.build/driver/profiles/reference-48k/` 和
+`.build/driver/profiles/reference-16k/`，架构再分为 `arm64/` 与 `x86_64/`。
+实验驱动的嵌入清单和 `identity-report.json` 用于确认 profile、初始采样率和架构。
+这些命令只构建驱动，不安装到系统；不得将实验产物复制进正式发行包。
+profile 构建必须使用命令中明确指定的名称，不支持的名称会报错退出。
+
 ## 设备与发行标识
 
 以下为已确认且已写入驱动、安装包和卸载工具的标识合同；arm64 已核实实际设备 UID、名称和驱动版本，

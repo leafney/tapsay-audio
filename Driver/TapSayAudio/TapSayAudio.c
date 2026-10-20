@@ -20,7 +20,7 @@
 #include <sys/syslog.h>
 #include <Accelerate/Accelerate.h>
 #include <Availability.h>
-#include "TapSayAudioBuildConfig.h"
+#include <TapSayAudioBuildConfig.h>
 
 //==================================================================================================
 #pragma mark -
@@ -85,7 +85,7 @@
 //    qualities:
 //    - a box
 //    - a device
-//        - supports 16000, 44100, 48000 sample rates
+//        - supports the discrete rates supplied by the selected build profile
 
 
 //        - provides a rate scalar of 1.0 via hard coding
@@ -373,6 +373,7 @@ static CFStringRef create_string(const char* value)
 
 static CFStringRef get_box_uid(void)          { return create_string(kBox_UID); }
 static CFStringRef get_device_uid(void)       { return create_string(kDevice_UID); }
+static CFStringRef get_device2_uid(void)      { return create_string(kDevice2_UID); }
 static CFStringRef get_device_name(void)      { return create_string(kDevice_Name); }
 static CFStringRef get_device2_name(void)     { return create_string(kDevice2_Name); }
 static CFStringRef get_device_model_uid(void) { return create_string(kDevice_ModelUID); }
@@ -518,6 +519,11 @@ static UInt32 device_control_list_size(AudioObjectPropertyScope scope, AudioObje
             break;
     }
 
+}
+
+static Boolean is_supported_device_object(AudioObjectID objectID)
+{
+    return objectID == kObjectID_Device || objectID == kObjectID_Device2;
 }
 
 static UInt32 minimum(UInt32 a, UInt32 b) {
@@ -773,7 +779,7 @@ static OSStatus	TapSayAudio_AddDeviceClient(AudioServerPlugInDriverRef inDriver,
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_AddDeviceClient: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_AddDeviceClient: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_AddDeviceClient: bad device ID");
 
 Done:
 	return theAnswer;
@@ -792,7 +798,7 @@ static OSStatus	TapSayAudio_RemoveDeviceClient(AudioServerPlugInDriverRef inDriv
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_RemoveDeviceClient: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_RemoveDeviceClient: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_RemoveDeviceClient: bad device ID");
 
 Done:
 	return theAnswer;
@@ -823,7 +829,7 @@ static OSStatus	TapSayAudio_PerformDeviceConfigurationChange(AudioServerPlugInDr
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad driver reference");
-    FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad device ID");
+    FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad device ID");
     switch(inChangeAction)
     {
         case ChangeAction_EnablePitchControl:
@@ -881,7 +887,7 @@ static OSStatus	TapSayAudio_AbortDeviceConfigurationChange(AudioServerPlugInDriv
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_PerformDeviceConfigurationChange: bad device ID");
 
 Done:
 	return theAnswer;
@@ -914,6 +920,7 @@ static Boolean	TapSayAudio_HasProperty(AudioServerPlugInDriverRef inDriver, Audi
 			break;
 
 		case kObjectID_Device:
+		case kObjectID_Device2:
 			theAnswer = TapSayAudio_HasDeviceProperty(inDriver, inObjectID, inClientProcessID, inAddress);
 			break;
 
@@ -963,6 +970,7 @@ static OSStatus	TapSayAudio_IsPropertySettable(AudioServerPlugInDriverRef inDriv
 			break;
 
 		case kObjectID_Device:
+		case kObjectID_Device2:
 			theAnswer = TapSayAudio_IsDevicePropertySettable(inDriver, inObjectID, inClientProcessID, inAddress, outIsSettable);
 			break;
 
@@ -1015,6 +1023,7 @@ static OSStatus	TapSayAudio_GetPropertyDataSize(AudioServerPlugInDriverRef inDri
 			break;
 
 		case kObjectID_Device:
+		case kObjectID_Device2:
 			theAnswer = TapSayAudio_GetDevicePropertyDataSize(inDriver, inObjectID, inClientProcessID, inAddress, inQualifierDataSize, inQualifierData, outDataSize);
 			break;
 
@@ -1068,6 +1077,7 @@ static OSStatus	TapSayAudio_GetPropertyData(AudioServerPlugInDriverRef inDriver,
 			break;
 
 		case kObjectID_Device:
+		case kObjectID_Device2:
 			theAnswer = TapSayAudio_GetDevicePropertyData(inDriver, inObjectID, inClientProcessID, inAddress, inQualifierDataSize, inQualifierData, inDataSize, outDataSize, outData);
 			break;
 
@@ -1119,6 +1129,7 @@ static OSStatus	TapSayAudio_SetPropertyData(AudioServerPlugInDriverRef inDriver,
 			break;
 
 		case kObjectID_Device:
+		case kObjectID_Device2:
 			theAnswer = TapSayAudio_SetDevicePropertyData(inDriver, inObjectID, inClientProcessID, inAddress, inQualifierDataSize, inQualifierData, inDataSize, inData, &theNumberPropertiesChanged, theChangedAddresses);
 			break;
 
@@ -1292,7 +1303,7 @@ static OSStatus	TapSayAudio_GetPlugInPropertyDataSize(AudioServerPlugInDriverRef
 		case kAudioPlugInPropertyDeviceList:
 			if(gBox_Acquired)
 			{
-				*outDataSize = sizeof(AudioClassID);
+				*outDataSize = (TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1) * sizeof(AudioObjectID);
 			}
 			else
 			{
@@ -1446,15 +1457,19 @@ static OSStatus	TapSayAudio_GetPlugInPropertyData(AudioServerPlugInDriverRef inD
 			//	case, only that number of items will be returned
 			theNumberItemsToFetch = inDataSize / sizeof(AudioObjectID);
 
-			//	Clamp that to the number of devices this driver implements (which is just 1 if the
-			//	box has been acquired)
-			if(theNumberItemsToFetch > (gBox_Acquired ? 1 : 0))
+			//	Clamp to the two devices implemented by this driver.
+			if(theNumberItemsToFetch > (gBox_Acquired ? (TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1) : 0))
 			{
-				theNumberItemsToFetch = (gBox_Acquired ? 1 : 0);
+				theNumberItemsToFetch = (gBox_Acquired ? (TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1) : 0);
 			}
 
 			//	Write the devices' object IDs into the return value
-			if(theNumberItemsToFetch > 0)
+			if(TAPSAY_ENABLE_REFERENCE_PROFILE && theNumberItemsToFetch > 1)
+			{
+				((AudioObjectID*)outData)[0] = kObjectID_Device;
+				((AudioObjectID*)outData)[1] = kObjectID_Device2;
+			}
+			else if(theNumberItemsToFetch > 0)
             {
                 ((AudioObjectID*)outData)[0] = kObjectID_Device;
             }
@@ -1476,10 +1491,16 @@ static OSStatus	TapSayAudio_GetPlugInPropertyData(AudioServerPlugInDriverRef inD
 
 
 			CFStringRef deviceUID = get_device_uid();
+			CFStringRef device2UID = get_device2_uid();
 
 			if(CFStringCompare(*((CFStringRef*)inQualifierData), deviceUID, 0) == kCFCompareEqualTo)
 			{
 				*((AudioObjectID*)outData) = kObjectID_Device;
+			}
+			else if(TAPSAY_ENABLE_REFERENCE_PROFILE &&
+                    CFStringCompare(*((CFStringRef*)inQualifierData), device2UID, 0) == kCFCompareEqualTo)
+			{
+				*((AudioObjectID*)outData) = kObjectID_Device2;
 			}
 			else
 			{
@@ -1487,6 +1508,7 @@ static OSStatus	TapSayAudio_GetPlugInPropertyData(AudioServerPlugInDriverRef inD
 			}
 			*outDataSize = sizeof(AudioObjectID);
 			CFRelease(deviceUID);
+			CFRelease(device2UID);
 			break;
 
 		case kAudioPlugInPropertyResourceBundle:
@@ -1731,7 +1753,8 @@ static OSStatus	TapSayAudio_GetBoxPropertyDataSize(AudioServerPlugInDriverRef in
 		case kAudioBoxPropertyDeviceList:
 			{
 				pthread_mutex_lock(&gPlugIn_StateMutex);
-				*outDataSize = gBox_Acquired ? sizeof(AudioObjectID) : 0;
+				*outDataSize = gBox_Acquired ?
+                    (TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1) * sizeof(AudioObjectID) : 0;
 				pthread_mutex_unlock(&gPlugIn_StateMutex);
 			}
 			break;
@@ -1751,6 +1774,7 @@ static OSStatus	TapSayAudio_GetBoxPropertyData(AudioServerPlugInDriverRef inDriv
 
 	//	declare the local variables
 	OSStatus theAnswer = 0;
+	UInt32 theNumberItemsToFetch = 0;
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetBoxPropertyData: bad driver reference");
@@ -1847,7 +1871,7 @@ static OSStatus	TapSayAudio_GetBoxPropertyData(AudioServerPlugInDriverRef inDriv
 			//	any 32 bit integer, but common values for this property are defined in
 			//	<CoreAudio/AudioHardwareBase.h>
 			FailWithAction(inDataSize < sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "TapSayAudio_GetBoxPropertyData: not enough space for the return value of kAudioDevicePropertyTransportType for the box");
-			*((UInt32*)outData) = kAudioDeviceTransportTypeUSB;
+			*((UInt32*)outData) = TAPSAY_BOX_TRANSPORT_TYPE;
 			*outDataSize = sizeof(UInt32);
 			break;
 
@@ -1900,16 +1924,19 @@ static OSStatus	TapSayAudio_GetBoxPropertyData(AudioServerPlugInDriverRef inDriv
 			pthread_mutex_lock(&gPlugIn_StateMutex);
 			if(gBox_Acquired)
 			{
-                if(inDataSize < sizeof(AudioObjectID))
-                {
-                    theAnswer = kAudioHardwareBadPropertySizeError;
-                    *outDataSize = 0;
-                }
-                else
+				theNumberItemsToFetch = minimum(
+                    inDataSize / sizeof(AudioObjectID),
+                    TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1
+                );
+				if(theNumberItemsToFetch > 0)
                 {
 					((AudioObjectID*)outData)[0] = kObjectID_Device;
-					*outDataSize = sizeof(AudioObjectID);
                 }
+				if(TAPSAY_ENABLE_REFERENCE_PROFILE && theNumberItemsToFetch > 1)
+                {
+					((AudioObjectID*)outData)[1] = kObjectID_Device2;
+                }
+				*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
 			}
 			else
 			{
@@ -2044,7 +2071,7 @@ static Boolean	TapSayAudio_HasDeviceProperty(AudioServerPlugInDriverRef inDriver
 	//	check the arguments
 	FailIf(inDriver != gAudioServerPlugInDriverRef, Done, "TapSayAudio_HasDeviceProperty: bad driver reference");
 	FailIf(inAddress == NULL, Done, "TapSayAudio_HasDeviceProperty: no address");
-	FailIf(inObjectID != kObjectID_Device, Done, "TapSayAudio_HasDeviceProperty: not the device object");
+	FailIf(!is_supported_device_object(inObjectID), Done, "TapSayAudio_HasDeviceProperty: not the device object");
 
 	//	Note that for each object, this driver implements all the required properties plus a few
 	//	extras that are useful but not required. There is more detailed commentary about each
@@ -2101,7 +2128,7 @@ static OSStatus	TapSayAudio_IsDevicePropertySettable(AudioServerPlugInDriverRef 
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_IsDevicePropertySettable: bad driver reference");
 	FailWithAction(inAddress == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_IsDevicePropertySettable: no address");
 	FailWithAction(outIsSettable == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_IsDevicePropertySettable: no place to put the return value");
-	FailWithAction(inObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_IsDevicePropertySettable: not the device object");
+	FailWithAction(!is_supported_device_object(inObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_IsDevicePropertySettable: not the device object");
 
 	//	Note that for each object, this driver implements all the required properties plus a few
 	//	extras that are useful but not required. There is more detailed commentary about each
@@ -2161,7 +2188,7 @@ static OSStatus	TapSayAudio_GetDevicePropertyDataSize(AudioServerPlugInDriverRef
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetDevicePropertyDataSize: bad driver reference");
 	FailWithAction(inAddress == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_GetDevicePropertyDataSize: no address");
 	FailWithAction(outDataSize == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_GetDevicePropertyDataSize: no place to put the return value");
-	FailWithAction(inObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetDevicePropertyDataSize: not the device object");
+	FailWithAction(!is_supported_device_object(inObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetDevicePropertyDataSize: not the device object");
 
 	//	Note that for each object, this driver implements all the required properties plus a few
 	//	extras that are useful but not required. There is more detailed commentary about each
@@ -2291,7 +2318,7 @@ static OSStatus	TapSayAudio_GetDevicePropertyData(AudioServerPlugInDriverRef inD
 	FailWithAction(inAddress == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_GetDevicePropertyData: no address");
 	FailWithAction(outDataSize == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_GetDevicePropertyData: no place to put the return value size");
 	FailWithAction(outData == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_GetDevicePropertyData: no place to put the return value");
-	FailWithAction(inObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetDevicePropertyData: not the device object");
+	FailWithAction(!is_supported_device_object(inObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetDevicePropertyData: not the device object");
 
 	//	Note that for each object, this driver implements all the required properties plus a few
 	//	extras that are useful but not required.
@@ -2384,19 +2411,8 @@ static OSStatus	TapSayAudio_GetDevicePropertyData(AudioServerPlugInDriverRef inD
 			//	device must have different values for this property.
 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "TapSayAudio_GetDevicePropertyData: not enough space for the return value of kAudioDevicePropertyDeviceUID for the device");
 
-            switch (inObjectID) {
-                case kObjectID_Device:
-                    *((CFStringRef*)outData) = get_device_uid();
-                    *outDataSize = sizeof(CFStringRef);
-                    break;
-
-                case kObjectID_Device2:
-                    *((CFStringRef*)outData) = CFSTR("");
-                    *outDataSize = sizeof(CFStringRef);
-                    break;
-            }
-
-
+			*((CFStringRef*)outData) = (inObjectID == kObjectID_Device2) ? get_device2_uid() : get_device_uid();
+			*outDataSize = sizeof(CFStringRef);
 			break;
 
 		case kAudioDevicePropertyModelUID:
@@ -2591,7 +2607,7 @@ static OSStatus	TapSayAudio_GetDevicePropertyData(AudioServerPlugInDriverRef inD
                 case kObjectID_Device2:
                     for (UInt32 i = 0, k = 0; k < theNumberItemsToFetch; i++)
                     {
-                        if ((kDevice_ObjectList[i].type == kObjectType_Control) && !(!gPitch_Adjust_Enabled && kDevice_ObjectList[i].id==kObjectID_Pitch_Adjust))
+                        if (kDevice2_ObjectList[i].type == kObjectType_Control)
                         {
                             ((AudioObjectID*)outData)[k++] = kDevice2_ObjectList[i].id;
                         }
@@ -2725,7 +2741,7 @@ static OSStatus	TapSayAudio_SetDevicePropertyData(AudioServerPlugInDriverRef inD
 	FailWithAction(inAddress == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_SetDevicePropertyData: no address");
 	FailWithAction(outNumberPropertiesChanged == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_SetDevicePropertyData: no place to return the number of properties that changed");
 	FailWithAction(outChangedAddresses == NULL, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_SetDevicePropertyData: no place to return the properties that changed");
-	FailWithAction(inObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_SetDevicePropertyData: not the device object");
+	FailWithAction(!is_supported_device_object(inObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_SetDevicePropertyData: not the device object");
 
 	//	initialize the returned number of changed properties
 	*outNumberPropertiesChanged = 0;
@@ -2751,7 +2767,7 @@ static OSStatus	TapSayAudio_SetDevicePropertyData(AudioServerPlugInDriverRef inD
 			if(*((const Float64*)inData) != theOldSampleRate)
 			{
 				//	we dispatch this so that the change can happen asynchronously
-				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{ gPlugIn_Host->RequestDeviceConfigurationChange(gPlugIn_Host, kObjectID_Device, ChangeAction_SetSampleRate, NULL); });
+				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{ gPlugIn_Host->RequestDeviceConfigurationChange(gPlugIn_Host, inObjectID, ChangeAction_SetSampleRate, NULL); });
 			}
 			break;
 
@@ -4179,7 +4195,7 @@ static OSStatus	TapSayAudio_StartIO(AudioServerPlugInDriverRef inDriver, AudioOb
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StartIO: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StartIO: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StartIO: bad device ID");
     FailWithAction(inDeviceObjectID == kObjectID_Device && gDevice_IOIsRunning == UINT64_MAX, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_StartIO: overflow error.");
     FailWithAction(inDeviceObjectID == kObjectID_Device2 && gDevice2_IOIsRunning == UINT64_MAX, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_StartIO: overflow error.");
 
@@ -4220,7 +4236,7 @@ static OSStatus	TapSayAudio_StopIO(AudioServerPlugInDriverRef inDriver, AudioObj
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StopIO: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StopIO: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_StopIO: bad device ID");
     FailWithAction(inDeviceObjectID == kObjectID_Device && gDevice_IOIsRunning == 0, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_StartIO: underflow error.");
     FailWithAction(inDeviceObjectID == kObjectID_Device2 && gDevice2_IOIsRunning == 0, theAnswer = kAudioHardwareIllegalOperationError, Done, "TapSayAudio_StartIO: underflow error.");
 
@@ -4267,7 +4283,7 @@ static OSStatus	TapSayAudio_GetZeroTimeStamp(AudioServerPlugInDriverRef inDriver
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetZeroTimeStamp: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetZeroTimeStamp: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_GetZeroTimeStamp: bad device ID");
 
 	//	we need to hold the locks
 	pthread_mutex_lock(&gDevice_IOMutex);
@@ -4320,7 +4336,7 @@ static OSStatus	TapSayAudio_WillDoIOOperation(AudioServerPlugInDriverRef inDrive
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_WillDoIOOperation: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_WillDoIOOperation: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_WillDoIOOperation: bad device ID");
 
 	//	figure out if we support the operation
 	bool willDo = false;
@@ -4365,7 +4381,7 @@ static OSStatus	TapSayAudio_BeginIOOperation(AudioServerPlugInDriverRef inDriver
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_BeginIOOperation: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_BeginIOOperation: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_BeginIOOperation: bad device ID");
 
 Done:
 	return theAnswer;
@@ -4382,7 +4398,7 @@ static OSStatus	TapSayAudio_DoIOOperation(AudioServerPlugInDriverRef inDriver, A
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_DoIOOperation: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_DoIOOperation: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_DoIOOperation: bad device ID");
 	FailWithAction((inStreamObjectID != kObjectID_Stream_Input) && (inStreamObjectID != kObjectID_Stream_Output), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_DoIOOperation: bad stream ID");
 
     // Calculate the ring buffer offsets and splits.
@@ -4473,7 +4489,7 @@ static OSStatus	TapSayAudio_EndIOOperation(AudioServerPlugInDriverRef inDriver, 
 
 	//	check the arguments
 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_EndIOOperation: bad driver reference");
-	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_EndIOOperation: bad device ID");
+	FailWithAction(!is_supported_device_object(inDeviceObjectID), theAnswer = kAudioHardwareBadObjectError, Done, "TapSayAudio_EndIOOperation: bad device ID");
 
 Done:
 	return theAnswer;
