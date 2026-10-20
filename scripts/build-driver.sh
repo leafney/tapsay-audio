@@ -39,7 +39,7 @@ for ARCH in arm64 x86_64; do
         -sdk macosx \
         -arch "$ARCH" \
         -derivedDataPath "$DERIVED_DATA" \
-        ONLY_ACTIVE_ARCH=YES \
+        ONLY_ACTIVE_ARCH=NO \
         CODE_SIGNING_ALLOWED=NO \
         TAPSAY_DRIVER_BUNDLE_ID="$DRIVER_BUNDLE_ID" \
         TAPSAY_PRODUCT_VERSION="$PRODUCT_VERSION" \

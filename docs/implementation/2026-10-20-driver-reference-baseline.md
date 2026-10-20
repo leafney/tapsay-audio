@@ -63,7 +63,11 @@ profile 合同测试覆盖：
 - `bash scripts/build-driver.sh reference-16k`
 - `bash scripts/build-driver.sh legacy`
 
-两个实验 profile 均完成 arm64、x86_64 Release 构建和产物身份检查。Xcode 日志中有
+两个实验 profile 均完成 arm64、x86_64 Release 构建和产物身份检查。首次构建后复核发现
+构建脚本曾传入 `ONLY_ACTIVE_ARCH=YES`，与 PRD 固定的参考值 `NO` 不一致；
+已修正脚本并重新执行两种 profile 的完整双架构构建，四条 xcodebuild 命令均显示
+`ONLY_ACTIVE_ARCH=NO`，产物身份检查通过。重建后的二进制散列与先前记录相同。
+Xcode 日志中有
 CoreSimulator 服务无法连接的主机诊断，但 macOS 驱动目标的 `BUILD SUCCEEDED`、
 架构检查和身份报告均通过；没有 TapSay C 编译错误。
 
@@ -88,10 +92,11 @@ CoreSimulator 服务无法连接的主机诊断，但 macOS 驱动目标的 `BUI
 - 没有检查运行中的驱动 Bundle ID、散列或实际采样率。
 - 没有用 RC003、MiRemoteV 实际切回、第三方输入法或长时间运行矩阵验收。
 - x86_64 只有交叉构建，不代表 Intel 真机通过。
-- 尚未构建隔离实验 PKG；系统安装步骤属于阶段三。
+- 隔离实验 PKG 曾在发现构建参数偏差前构建；该包仅用于校验包构建链路，
+  不作为阶段三实测候选。阶段三须从修正后的配置重新构建唯一标识的新包。
 
 ## 阶段结论
 
-两种 profile 的配置、驱动回调合同、正式配置回归和双架构 Release 构建通过，
+两种 profile 的配置、驱动回调合同、正式配置回归和修正后的双架构 Release 构建通过，
 满足阶段二自动门槛。该结论不表示声卡的真实系统音频链路已通过；
 阶段三必须先构建并检查隔离实验包，再按 PRD 完成 MiRemoteV 对照及真实设备矩阵。
