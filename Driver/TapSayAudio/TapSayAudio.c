@@ -1441,6 +1441,17 @@ static OSStatus	TapSayAudio_GetPlugInPropertyData(AudioServerPlugInDriverRef inD
 
 			if(CFStringCompare(*((CFStringRef*)inQualifierData), boxUID, 0) == kCFCompareEqualTo)
 			{
+				CFStringRef formattedString = CFStringCreateWithFormat(NULL, NULL, CFSTR("%s"), kBox_UID);
+				if(CFStringCompare(*((CFStringRef*)inQualifierData), formattedString, 0) == kCFCompareEqualTo)
+				{
+					*((AudioObjectID*)outData) = kObjectID_Box;
+				}
+				else
+				{
+					*((AudioObjectID*)outData) = kAudioObjectUnknown;
+				}
+				*outDataSize = sizeof(AudioObjectID);
+				CFRelease(formattedString);
 				*((AudioObjectID*)outData) = kObjectID_Box;
 			}
 			else
@@ -1924,19 +1935,27 @@ static OSStatus	TapSayAudio_GetBoxPropertyData(AudioServerPlugInDriverRef inDriv
 			pthread_mutex_lock(&gPlugIn_StateMutex);
 			if(gBox_Acquired)
 			{
-				theNumberItemsToFetch = minimum(
-                    inDataSize / sizeof(AudioObjectID),
-                    TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1
-                );
-				if(theNumberItemsToFetch > 0)
-                {
-					((AudioObjectID*)outData)[0] = kObjectID_Device;
-                }
-				if(TAPSAY_ENABLE_REFERENCE_PROFILE && theNumberItemsToFetch > 1)
-                {
-					((AudioObjectID*)outData)[1] = kObjectID_Device2;
-                }
-				*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+				if(TAPSAY_ENABLE_REFERENCE_PROFILE && inDataSize < sizeof(AudioObjectID))
+				{
+					theAnswer = kAudioHardwareBadPropertySizeError;
+					*outDataSize = 0;
+				}
+				else
+				{
+					theNumberItemsToFetch = minimum(
+						inDataSize / sizeof(AudioObjectID),
+						TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1
+					);
+					if(theNumberItemsToFetch > 0)
+					{
+						((AudioObjectID*)outData)[0] = kObjectID_Device;
+					}
+					if(TAPSAY_ENABLE_REFERENCE_PROFILE && theNumberItemsToFetch > 1)
+					{
+						((AudioObjectID*)outData)[1] = kObjectID_Device2;
+					}
+					*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+				}
 			}
 			else
 			{
@@ -2767,7 +2786,8 @@ static OSStatus	TapSayAudio_SetDevicePropertyData(AudioServerPlugInDriverRef inD
 			if(*((const Float64*)inData) != theOldSampleRate)
 			{
 				//	we dispatch this so that the change can happen asynchronously
-				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{ gPlugIn_Host->RequestDeviceConfigurationChange(gPlugIn_Host, inObjectID, ChangeAction_SetSampleRate, NULL); });
+				AudioObjectID configurationDevice = TAPSAY_ENABLE_REFERENCE_PROFILE ? kObjectID_Device : inObjectID;
+				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{ gPlugIn_Host->RequestDeviceConfigurationChange(gPlugIn_Host, configurationDevice, ChangeAction_SetSampleRate, NULL); });
 			}
 			break;
 

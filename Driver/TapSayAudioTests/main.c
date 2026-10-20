@@ -40,22 +40,24 @@ static void expect_string(AudioObjectID object_id, AudioObjectPropertySelector s
 static void expect_device_list(AudioObjectID object_id, AudioObjectPropertySelector selector, UInt32 capacity, UInt32 expected_count)
 {
     AudioObjectPropertyAddress address = property(selector, kAudioObjectPropertyScopeGlobal);
-    AudioObjectID objects[4] = { 0, 0, 0, 0 };
+    const AudioObjectID sentinel = 0xdeadbeef;
+    AudioObjectID objects[4] = { sentinel, sentinel, sentinel, sentinel };
     UInt32 size = capacity * sizeof(AudioObjectID);
     OSStatus status = TapSayAudio_GetPropertyData(
         gAudioServerPlugInDriverRef, object_id, 0, &address, 0, NULL, size, &size, objects
     );
-    assert(status == noErr);
+    OSStatus expected_status = TAPSAY_ENABLE_REFERENCE_PROFILE && gBox_Acquired
+        && object_id == kObjectID_Box && capacity == 0 ? kAudioHardwareBadPropertySizeError : noErr;
+    assert(status == expected_status);
     assert(size == expected_count * sizeof(AudioObjectID));
     if (expected_count > 0) assert(objects[0] == kObjectID_Device);
     if (expected_count > 1) assert(objects[1] == kObjectID_Device2);
+    for (UInt32 index = expected_count; index < 4; index++) assert(objects[index] == sentinel);
 }
 
-static AudioObjectID translate_device_uid(const char *uid)
+static AudioObjectID translate_uid(const char *uid, AudioObjectPropertySelector selector)
 {
-    AudioObjectPropertyAddress address = property(
-        kAudioPlugInPropertyTranslateUIDToDevice, kAudioObjectPropertyScopeGlobal
-    );
+    AudioObjectPropertyAddress address = property(selector, kAudioObjectPropertyScopeGlobal);
     CFStringRef qualifier_uid = CFStringCreateWithCString(NULL, uid, kCFStringEncodingUTF8);
     AudioObjectID translated = kAudioObjectUnknown;
     UInt32 size = sizeof(translated);
@@ -66,6 +68,77 @@ static AudioObjectID translate_device_uid(const char *uid)
     CFRelease(qualifier_uid);
     assert(size == sizeof(translated));
     return translated;
+}
+
+static AudioObjectID translate_device_uid(const char *uid)
+{
+    return translate_uid(uid, kAudioPlugInPropertyTranslateUIDToDevice);
+}
+
+static void check_reference_boundaries(void)
+{
+    assert(translate_uid(kBox_UID, kAudioPlugInPropertyTranslateUIDToBox) == kObjectID_Box);
+    assert(translate_uid("unknown", kAudioPlugInPropertyTranslateUIDToBox) == kAudioObjectUnknown);
+    for (UInt32 bytes = 0; bytes < sizeof(AudioObjectID); bytes++) {
+        AudioObjectPropertyAddress address = property(kAudioBoxPropertyDeviceList, kAudioObjectPropertyScopeGlobal);
+        AudioObjectID value = 0xdeadbeef;
+        UInt32 size = 123;
+        OSStatus status = TapSayAudio_GetPropertyData(
+            gAudioServerPlugInDriverRef, kObjectID_Box, 0, &address, 0, NULL, bytes, &size, &value
+        );
+        assert(status == (TAPSAY_ENABLE_REFERENCE_PROFILE ? kAudioHardwareBadPropertySizeError : noErr));
+        assert(size == 0 && value == 0xdeadbeef);
+    }
+    gBox_Acquired = false;
+    expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 0, 0);
+    expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 4, 0);
+    expect_device_list(kObjectID_PlugIn, kAudioPlugInPropertyDeviceList, 4, 0);
+    gBox_Acquired = true;
+    for (UInt32 index = 0; index < 2; index++) {
+        AudioObjectPropertyAddress address = property(index == 0 ? kAudioPlugInPropertyTranslateUIDToBox
+            : kAudioPlugInPropertyTranslateUIDToDevice, kAudioObjectPropertyScopeGlobal);
+        CFStringRef uid = CFSTR("unknown");
+        AudioObjectID value = 0xdeadbeef;
+        UInt32 size = sizeof(value);
+        assert(TapSayAudio_GetPropertyData(
+            gAudioServerPlugInDriverRef, kObjectID_PlugIn, 0, &address,
+            sizeof(uid) - 1, &uid, sizeof(value), &size, &value
+        ) == kAudioHardwareBadPropertySizeError);
+        assert(value == 0xdeadbeef);
+    }
+}
+
+static dispatch_semaphore_t configuration_requested;
+static AudioObjectID configuration_device;
+
+static OSStatus record_configuration_request(AudioServerPlugInHostRef host, AudioObjectID device,
+    UInt64 action, void *info)
+{
+    (void)host;
+    assert(action == ChangeAction_SetSampleRate && info == NULL);
+    configuration_device = device;
+    dispatch_semaphore_signal(configuration_requested);
+    return noErr;
+}
+
+static void check_sample_rate_request_target(void)
+{
+    AudioServerPlugInHostInterface host = { .RequestDeviceConfigurationChange = record_configuration_request };
+    gPlugIn_Host = &host;
+    configuration_requested = dispatch_semaphore_create(0);
+    AudioObjectPropertyAddress address = property(kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal);
+    Float64 rate = gDevice_SampleRate == 48000 ? 16000 : 48000;
+    for (UInt32 index = 0; index < (TAPSAY_ENABLE_REFERENCE_PROFILE ? 2 : 1); index++) {
+        AudioObjectID device = index == 0 ? kObjectID_Device : kObjectID_Device2;
+        configuration_device = kAudioObjectUnknown;
+        assert(TapSayAudio_SetPropertyData(
+            gAudioServerPlugInDriverRef, device, 0, &address, 0, NULL, sizeof(rate), &rate
+        ) == noErr);
+        assert(dispatch_semaphore_wait(configuration_requested, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0);
+        assert(configuration_device == kObjectID_Device);
+    }
+    dispatch_release(configuration_requested);
+    gPlugIn_Host = NULL;
 }
 
 static void check_owned_object_capacity(AudioObjectID object_id, UInt32 expected_count)
@@ -112,6 +185,7 @@ static void check_identity_and_enumeration(void)
     expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 0, 0);
     expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 1, 1);
     expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 2, count);
+    expect_device_list(kObjectID_Box, kAudioBoxPropertyDeviceList, 4, count);
 
     address = property(kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyScopeGlobal);
     AudioObjectID owned_objects[4] = { 0, 0, 0, 0 };
@@ -163,6 +237,12 @@ static void check_identity_and_enumeration(void)
         ) == noErr);
         assert(size == device_control_list_size(kAudioObjectPropertyScopeGlobal, kObjectID_Device2)
             * sizeof(AudioObjectID));
+        const AudioObjectID expected_controls[] = {
+            kObjectID_Volume_Input_Master, kObjectID_Mute_Input_Master,
+            kObjectID_Volume_Output_Master, kObjectID_Mute_Output_Master,
+        };
+        assert(size == sizeof(expected_controls));
+        assert(memcmp(controls, expected_controls, sizeof(expected_controls)) == 0);
 
         address = property(kAudioDevicePropertyIsHidden, kAudioObjectPropertyScopeGlobal);
         UInt32 hidden = 0;
@@ -312,6 +392,8 @@ int main(int argc, char **argv)
     check_transport_and_default_rate();
     check_supported_formats();
     check_control_defaults();
+    check_reference_boundaries();
+    check_sample_rate_request_target();
     check_pcm_ring_buffer_round_trip(kObjectID_Device);
     if (TAPSAY_ENABLE_REFERENCE_PROFILE) {
         check_pcm_ring_buffer_round_trip(kObjectID_Device2);

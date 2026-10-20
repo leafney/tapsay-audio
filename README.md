@@ -69,7 +69,20 @@ bash scripts/build-driver.sh reference-16k
 profile 构建必须使用命令中明确指定的名称，不支持的名称会报错退出。
 
 需要单独准备安装验收包时，先构建原生事务工具和对应 profile 驱动，再显式指定 profile
-与架构运行 `bash scripts/build-experiment-package.sh reference-48k arm64`。
+与架构进行参考构建核对，再打包。例如，将 `REFERENCE_ROOT` 指向已核验的固定上游源码目录：
+
+```sh
+python3 scripts/audit-reference-build.py "$REFERENCE_ROOT" \
+  .build/driver/profiles/reference-48k/arm64/Build/Products/Release/build-evidence.json
+bash scripts/build-experiment-package.sh reference-48k arm64
+```
+
+`build-evidence.json` 保存实际编译命令、完整有效构建设置、构建输入与驱动散列。
+参考核对检查固定源码和工程散列、代码生成参数及预处理后音频宏，
+将完整设置差异与源码差异写入 `reference-audit.json`。
+源码差异仍须人工逐项审阅；此工具不宣称自动证明两份源码语义等价。
+保留的错误修正仅限 PRD 明确批准的对象索引、UID 参数校验和隐藏设备列表筛选。
+没有匹配的构建证据与参考核对，或构建后源码、工作区状态改变，实验打包会拒绝。
 实验包、包散列和实验清单位于 `.build/experiments/` 的提交隔离目录；
 包校验必须显式传入同一 profile。该脚本只生成未签名实验包，不执行安装。
 

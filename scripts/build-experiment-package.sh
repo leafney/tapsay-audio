@@ -31,6 +31,8 @@ STAGING="$OUTPUT_DIR/.package-scripts-$BUILD_ID"
 EMPTY_ROOT="$OUTPUT_DIR/.empty-root-$BUILD_ID"
 TEMP_PACKAGE="$OUTPUT_DIR/.TapSayAudio-Reference-$PROFILE-$ARCH-$SOURCE_COMMIT-$BUILD_ID.pkg"
 MANIFEST="$ROOT/.build/generated/$PROFILE/profile-manifest.json"
+BUILD_EVIDENCE="$(dirname "$DRIVER")/build-evidence.json"
+REFERENCE_AUDIT="$(dirname "$DRIVER")/reference-audit.json"
 
 if [[ ! -d "$DRIVER" ]]; then
     echo "Reference driver is missing; build it first: $DRIVER" >&2
@@ -44,6 +46,10 @@ if [[ ! -f "$MANIFEST" ]]; then
     echo "Reference profile manifest is missing; build the profile first: $MANIFEST" >&2
     exit 1
 fi
+if [[ ! -f "$BUILD_EVIDENCE" || ! -f "$REFERENCE_AUDIT" ]]; then
+    echo "Missing build evidence or reference audit; rebuild and audit this architecture first." >&2
+    exit 1
+fi
 if [[ -e "$PACKAGE" || -e "$PACKAGE_INFO" || -e "$OUTPUT_MANIFEST" ]]; then
     echo "Refusing to overwrite existing experiment outputs in: $OUTPUT_DIR" >&2
     exit 1
@@ -54,20 +60,37 @@ if [[ -e "$STAGING" || -e "$EMPTY_ROOT" || -e "$TEMP_PACKAGE" ]]; then
     echo "Refusing to reuse an existing temporary package path." >&2
     exit 1
 fi
+cleanup() {
+    rm -f "$TEMP_PACKAGE"
+    rm -rf "$STAGING" "$EMPTY_ROOT"
+}
+trap cleanup EXIT
 mkdir "$STAGING" "$EMPTY_ROOT"
 mkdir -p "$STAGING/package-payload"
 cp -R "$DRIVER" "$STAGING/package-payload/TapSayAudio.driver"
 mkdir -p "$STAGING/package-payload/TapSayAudio.driver/Contents/Resources"
 DRIVER_SHA="$(/usr/bin/shasum -a 256 "$DRIVER/Contents/MacOS/TapSayAudio" | /usr/bin/awk '{print $1}')"
-python3 - "$MANIFEST" "$STAGING/experiment-manifest.json" "$PROFILE" "$ARCH" "$SOURCE_COMMIT" "$DRIVER_SHA" "$ROOT" <<'PY'
+python3 - "$MANIFEST" "$STAGING/experiment-manifest.json" "$PROFILE" "$ARCH" "$SOURCE_COMMIT" "$DRIVER_SHA" "$ROOT" "$BUILD_EVIDENCE" "$REFERENCE_AUDIT" <<'PY'
+import hashlib
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-source_manifest, output_manifest, profile, architecture, source_commit, driver_sha, root = sys.argv[1:]
+source_manifest, output_manifest, profile, architecture, source_commit, driver_sha, root, evidence_path, audit_path = sys.argv[1:]
 root = Path(root)
+evidence = json.loads(Path(evidence_path).read_text())
+audit = json.loads(Path(audit_path).read_text())
+if (evidence.get("driver_sha256") != driver_sha or audit.get("driver_sha256") != driver_sha
+        or audit.get("status") != "passed"
+        or audit.get("build_evidence_sha256") != hashlib.sha256(Path(evidence_path).read_bytes()).hexdigest()
+        or evidence["effective_settings"].get("ARCHS") != architecture
+        or not evidence.get("source_commit", "").startswith(source_commit)):
+    raise SystemExit("构建证据、参考核对、源码提交或驱动产物不匹配")
+for path, digest in evidence["source_sha256"].items():
+    if hashlib.sha256(Path(path).read_bytes()).hexdigest() != digest:
+        raise SystemExit("构建后源码已改变，请重新构建：" + path)
 manifest = json.loads(Path(source_manifest).read_text(encoding="utf-8"))
 metadata = json.loads((root / "config/product.json").read_text(encoding="utf-8"))
 manifest["product_identity"] = dict(metadata["driver"])
@@ -82,6 +105,8 @@ changes = subprocess.check_output(
     ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
     text=True,
 ).splitlines()
+if changes != evidence.get("source_changes"):
+    raise SystemExit("构建后工作区状态已改变，请从当前源码重新构建")
 xcode = subprocess.check_output(["xcodebuild", "-version"], text=True).splitlines()
 sdk_version = subprocess.check_output(
     ["xcrun", "--sdk", "macosx", "--show-sdk-version"], text=True
@@ -97,13 +122,11 @@ manifest.update({
     "xcode": xcode,
     "sdk": {"name": "macosx", "version": sdk_version},
     "deployment_target": metadata["product"]["minimum_macos"],
-    "build_settings": {
-        "configuration": "Release",
-        "architecture": architecture,
-        "ONLY_ACTIVE_ARCH": "NO",
-        "CODE_SIGNING_ALLOWED": "NO",
-        "minimum_macos": metadata["product"]["minimum_macos"],
-    },
+    "build_settings": evidence["effective_settings"],
+    "build_evidence": evidence,
+    "build_evidence_sha256": hashlib.sha256(Path(evidence_path).read_bytes()).hexdigest(),
+    "reference_audit": audit,
+    "approved_exceptions": audit["approved_exceptions"],
     "package_signing": "unsigned local experiment",
     "driver_sha256": driver_sha,
     "reference_patch_sha256_source": "frozen implementation record",
@@ -119,12 +142,6 @@ chmod 755 "$STAGING/preinstall" "$STAGING/postinstall" "$STAGING/TapSayAudioTran
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["version"])' "$ROOT/config/product.json")"
 MINIMUM_MACOS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["minimum_macos"])' "$ROOT/config/product.json")"
 RECEIPT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["driver"]["package_receipt_identifier"])' "$ROOT/config/product.json")"
-cleanup() {
-    rm -f "$TEMP_PACKAGE"
-    rm -rf "$STAGING" "$EMPTY_ROOT"
-}
-trap cleanup EXIT
-
 /usr/bin/pkgbuild \
     --root "$EMPTY_ROOT" \
     --scripts "$STAGING" \

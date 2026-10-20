@@ -32,7 +32,8 @@ FACTORY_UUID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[
 
 for ARCH in arm64 x86_64; do
     DERIVED_DATA="$PROFILE_BUILD_ROOT/$ARCH"
-    xcodebuild \
+    python3 "$ROOT/scripts/capture-driver-build.py" \
+        "$DERIVED_DATA/Build/Products/Release/build-evidence.json" -- xcodebuild \
         -project "$PROJECT" \
         -scheme TapSayAudio \
         -configuration Release \

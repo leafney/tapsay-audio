@@ -80,6 +80,21 @@ def main():
             )
             driver_sha = hashlib.sha256(executable.read_bytes()).hexdigest()
             require(manifest.get("driver_sha256") == driver_sha, "内嵌清单驱动散列不匹配")
+            evidence = manifest.get("build_evidence", {})
+            audit = manifest.get("reference_audit", {})
+            require(evidence.get("driver_sha256") == driver_sha, "实际构建证据与驱动不匹配")
+            require(audit.get("driver_sha256") == driver_sha and audit.get("status") == "passed",
+                    "缺少通过的参考构建核对")
+            require(evidence.get("effective_settings") == manifest.get("build_settings"),
+                    "内嵌构建设置与实际构建记录不匹配")
+            require(evidence.get("effective_settings", {}).get("ARCHS") == expected_arch,
+                    "实际构建架构不匹配")
+            require(audit.get("build_evidence_sha256") == manifest.get("build_evidence_sha256"),
+                    "参考核对对应的构建证据不匹配")
+            evidence_sha = hashlib.sha256((json.dumps(evidence, indent=2) + "\n").encode()).hexdigest()
+            require(evidence_sha == manifest.get("build_evidence_sha256"), "内嵌构建证据散列不匹配")
+            require(evidence.get("source_commit", "").startswith(manifest.get("source_commit", "!")),
+                    "实际构建与打包源码提交不匹配")
         else:
             require("TapSayAudioProfile" not in info, "实验包必须显式提供 profile 参数")
         require(
