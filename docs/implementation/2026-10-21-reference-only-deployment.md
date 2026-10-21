@@ -29,6 +29,18 @@
 
 部署前只读检查：MiRemoteV 与旧 TapSay 实际名义率均为 48000 Hz，主设备输入输出各一个流。MiRemoteV 二进制 SHA-256 `f3c5f12368af4e80d534c40b6154f94ec09218fc4ba09afbd398103093d32be9`；旧 TapSay 为 `fc4e0d9966c960685de77863708d59fe4f06de02af77f208c36aa1b0b6e4bddd`。
 
-下一步以 `dist/TapSayAudio-2ch-0.1.0.pkg` 覆盖安装，记录安装退出码、落地驱动散列、CoreAudio 实际名义率和输入输出流格式，再执行 48 kHz 合成 PCM 环回。尚未把这些待执行步骤视为通过。证据目录 `.build/experiments/evidence/2026-10-21-reference-only-deploy/`。
+用户最终选择手动安装，自动安装请求已中止，未取得安装成功结果。后续由用户双击 `dist/TapSayAudio-2ch-0.1.0.pkg` 覆盖安装，再记录落地驱动散列、CoreAudio 实际名义率和输入输出流格式，执行 48 kHz 合成 PCM 环回。安装和真实音频测试均仍待执行。证据目录 `.build/experiments/evidence/2026-10-21-reference-only-deploy/`。
+
+## 最终手动安装资产
+
+从提交 `f9f962b0e0bb55b89181960f7944d68ab18eeaf6` 的干净工作树重建，源码归档内保存对应提交及 `working_tree=clean`。最终驱动可执行文件 SHA-256 为 `df3926398fce9633c21c1a202e79272f514a8076bae84b19c31d8f06452e1633`，包内与本次构建结果一致。此值取代前述首次开发构建的二进制散列作为本次安装核对依据。
+
+| 交付文件 | SHA-256 |
+| --- | --- |
+| `dist/TapSayAudio-2ch-0.1.0.pkg` | `a7af9818862a9d93b6c3f3a47dc7aa7df77468429af5ff5df9f2e5c8b80561b3` |
+| `dist/TapSayAudio-2ch-0.1.0-arm64.dmg` | `628e56b76852ae59ecf311d77b23e9c94dc34cae9c908245930f2a67964d9e67` |
+| `dist/TapSayAudio-2ch-0.1.0-source.tar.gz` | `3e2c9b044f929b0b62321ea37dbc2efc5be210278abb38e482625c896a700a20` |
+
+交付前再次执行 PKG 内容检查及三个文件的 SHA-256 校验，全部通过。DMG 包含安装 PKG、独立卸载入口与中文说明。支持 Apple Silicon arm64/macOS 14 起，初始 48 kHz；当前为本地未签名、未公证测试包。
 
 真实遥控器切回、长按/释放、第三方文字上屏和长时矩阵仍需实测；自动合成环回不能替代。正式签名、公证、公开下载地址仍未提供，当前产物是本地部署验证包。
