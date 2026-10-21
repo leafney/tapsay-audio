@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 mkdir -p "$ROOT/.build/native/module-cache"
-for ARCH in arm64 x86_64; do
+for ARCH in arm64; do
     mkdir -p "$ROOT/.build/native/$ARCH"
     xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
         -module-cache-path "$ROOT/.build/native/module-cache" \

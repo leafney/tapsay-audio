@@ -17,9 +17,7 @@ VERSION = META["product"]["version"]
 DIST = ROOT / "dist"
 ASSETS = [
     f"TapSayAudio-2ch-{VERSION}-arm64.pkg",
-    f"TapSayAudio-2ch-{VERSION}-x86_64.pkg",
     f"TapSayAudio-2ch-{VERSION}-arm64.dmg",
-    f"TapSayAudio-2ch-{VERSION}-x86_64.dmg",
     f"TapSayAudio-2ch-{VERSION}-source.tar.gz",
 ]
 
@@ -57,7 +55,7 @@ def main():
             failures.append(f"{path.name} 的散列与 SHA256SUMS.txt 不一致")
         rows.append(f"| `{path.name}` | {path.stat().st_size} | `{digest}` |")
 
-    for arch in ("arm64", "x86_64"):
+    for arch in ("arm64",):
         pkg = DIST / f"TapSayAudio-2ch-{VERSION}-{arch}.pkg"
         if pkg.is_file():
             check = run(["/usr/sbin/pkgutil", "--check-signature", str(pkg)])
@@ -108,7 +106,7 @@ def main():
         [
             "Developer ID 签名及公证未完成",
             "arm64 升级、降级、真实卸载清理、真实遥控器及第三方软件链路未完成（同版重装、收据、三种采样率合成环回、隔离回滚与历史清理及主程序默认格式单声道图已通过）",
-            "x86_64 Intel 真机验收未完成",
+            "Intel x86_64 暂不支持",
             "GitHub Release 未发布，真实下载地址不存在",
         ]
     )

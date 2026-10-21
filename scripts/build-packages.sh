@@ -16,7 +16,7 @@ DRIVER_BUNDLE="$(read_meta driver.bundle_identifier)"
 DRIVER_EXECUTABLE="$(read_meta driver.executable_name)"
 DRIVER_UID="$(read_meta driver.device_uid)"
 UNINSTALLER_NAME="$(read_meta uninstaller.display_name)"
-ARCHES=(arm64 x86_64)
+ARCHES=(arm64)
 
 mkdir -p "$OUT"
 rm -f "$OUT/TapSayAudio-2ch-$VERSION"*.pkg \
@@ -30,7 +30,8 @@ python3 "$ROOT/scripts/check-uninstaller.py"
 bash "$ROOT/scripts/build-driver.sh"
 
 for ARCH in "${ARCHES[@]}"; do
-    BUNDLE="$ROOT/.build/driver/$ARCH/Build/Products/Release/$DRIVER_EXECUTABLE.driver"
+    BUNDLE="$(find "$ROOT/.build" -path '*/tapsay-driver-arm64.*/TapSayAudio.driver' -type d -print | sort | tail -1)"
+    test -n "$BUNDLE" && test -d "$BUNDLE"
     SCRIPTS="$OUT/scripts-$ARCH"
     EMPTY_ROOT="$OUT/empty-root-$ARCH"
     DMGROOT="$OUT/dmg-$ARCH"
@@ -91,9 +92,7 @@ bash "$ROOT/scripts/build-source-archive.sh"
 (
     cd "$OUT"
     /usr/bin/shasum -a 256 TapSayAudio-2ch-"$VERSION"-arm64.pkg \
-        TapSayAudio-2ch-"$VERSION"-x86_64.pkg \
         TapSayAudio-2ch-"$VERSION"-arm64.dmg \
-        TapSayAudio-2ch-"$VERSION"-x86_64.dmg \
         TapSayAudio-2ch-"$VERSION"-source.tar.gz > SHA256SUMS.txt
 )
 python3 "$ROOT/scripts/check-release-readiness.py"

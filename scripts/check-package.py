@@ -28,7 +28,7 @@ def main():
     pkg = Path(sys.argv[1]).resolve()
     expected_arch = sys.argv[2]
     profile = sys.argv[3] if len(sys.argv) == 4 else None
-    require(expected_arch in ("arm64", "x86_64"), f"不支持的架构：{expected_arch}")
+    require(expected_arch == "arm64", f"本阶段只支持 arm64：{expected_arch}")
     if profile:
         require(profile in PROFILES["profiles"], f"未知实验配置：{profile}")
     require(pkg.is_file(), f"PKG 不存在：{pkg}")

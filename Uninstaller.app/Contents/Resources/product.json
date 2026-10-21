@@ -7,8 +7,7 @@
     "build_number": "1",
     "minimum_macos": "14.0",
     "architectures": [
-      "arm64",
-      "x86_64"
+      "arm64"
     ]
   },
   "driver": {
@@ -22,15 +21,27 @@
     "transport_type": "usb",
     "channels": 2,
     "sample_rates_hz": [
+      8000,
       16000,
+      24000,
       44100,
-      48000
+      48000,
+      88200,
+      96000,
+      176400,
+      192000,
+      352800,
+      384000,
+      705600,
+      768000
     ],
-    "default_sample_rate_hz": 16000,
+    "default_sample_rate_hz": 48000,
     "device_uid": "com.leafney.tapsay.audio.device.2ch",
     "box_uid": "com.leafney.tapsay.audio.box",
     "model_uid": "com.leafney.tapsay.audio.model.2ch",
-    "hidden_device_uids": [],
+    "hidden_device_uids": [
+      "com.leafney.tapsay.audio.device.2ch.2"
+    ],
     "plugin_factory_uuid": "CC1226D1-A123-47B7-B113-5228AB089AA8",
     "audio_server_plugin_type_uuid": "443ABAB8-E7B3-491A-B985-BEB9187030DB"
   },
