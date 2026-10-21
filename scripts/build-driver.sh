@@ -1,62 +1,59 @@
 #!/bin/bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PROJECT="$ROOT/Driver/TapSayAudio.xcodeproj"
-BUILD_ROOT="${BUILD_ROOT:-$ROOT/.build/driver}"
-if [[ "$#" -gt 1 ]]; then
-    echo "Usage: $0 [legacy|reference-48k|reference-16k]" >&2
-    exit 2
-fi
-PROFILE="${1:-legacy}"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+archive="${1:-/private/tmp/blackhole-e2b22aaaba4e507a097131704bf96dabc004d9cf.tar.gz}"
+archive_sha=5d523d51165873ee339bfb670694de61ad2ce84a0c72a6df32dbb283313f26b0
+usb_patch="$root/third_party/blackhole/blackhole-device-usb.patch"
+identity_patch="$root/third_party/blackhole/tapsay-identity.patch"
+expected_patch_sha=51dea42771bc432573433f76a0bfb140d9463db112d568f0192e97b5b7a2dc5f
 
-if [[ "$PROFILE" == "legacy" ]]; then
-    python3 "$ROOT/scripts/check-metadata.py"
-    python3 "$ROOT/scripts/generate-driver-config.py"
-    CONFIG_DIR="$ROOT/Driver/TapSayAudio"
-    IS_PROFILE=0
-    PROFILE_BUILD_ROOT="$BUILD_ROOT"
-else
-    python3 "$ROOT/scripts/check-metadata.py" --profile "$PROFILE"
-    CONFIG_DIR="$ROOT/.build/generated/$PROFILE"
-    python3 "$ROOT/scripts/generate-driver-config.py" --profile "$PROFILE" --output-dir "$CONFIG_DIR"
-    IS_PROFILE=1
-    PROFILE_BUILD_ROOT="$BUILD_ROOT/profiles/$PROFILE"
-fi
+sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+test "$(sha256 "$archive")" = "$archive_sha"
+test "$(sha256 "$usb_patch")" = "$expected_patch_sha"
+test -s "$identity_patch"
 
-PRODUCT_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["version"])' "$ROOT/config/product.json")"
-BUILD_NUMBER="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["build_number"])' "$ROOT/config/product.json")"
-MINIMUM_MACOS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["minimum_macos"])' "$ROOT/config/product.json")"
-DRIVER_BUNDLE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["driver"]["bundle_identifier"])' "$ROOT/config/product.json")"
-FACTORY_UUID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["driver"]["plugin_factory_uuid"])' "$ROOT/config/product.json")"
+mkdir -p "$root/.build"
+work="$(mktemp -d "$root/.build/tapsay-driver-arm64.XXXXXX")"
+tar -xzf "$archive" -C "$work"
+source="$work/BlackHole-e2b22aaaba4e507a097131704bf96dabc004d9cf"
+patch -p1 -i "$usb_patch" -d "$source"
+patch -p1 -i "$identity_patch" -d "$source"
 
-for ARCH in arm64 x86_64; do
-    DERIVED_DATA="$PROFILE_BUILD_ROOT/$ARCH"
-    python3 "$ROOT/scripts/capture-driver-build.py" \
-        "$DERIVED_DATA/Build/Products/Release/build-evidence.json" -- xcodebuild \
-        -project "$PROJECT" \
-        -scheme TapSayAudio \
-        -configuration Release \
-        -sdk macosx \
-        -arch "$ARCH" \
-        -derivedDataPath "$DERIVED_DATA" \
-        ONLY_ACTIVE_ARCH=NO \
-        CODE_SIGNING_ALLOWED=NO \
-        TAPSAY_DRIVER_BUNDLE_ID="$DRIVER_BUNDLE_ID" \
-        TAPSAY_PRODUCT_VERSION="$PRODUCT_VERSION" \
-        TAPSAY_MINIMUM_MACOS="$MINIMUM_MACOS" \
-        TAPSAY_PLUGIN_FACTORY_UUID="$FACTORY_UUID" \
-        HEADER_SEARCH_PATHS="$CONFIG_DIR" \
-        INFOPLIST_FILE="$CONFIG_DIR/TapSayAudio.plist" \
-        CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-        build
+grep -Fq 'com.leafney.tapsay.audio.device.2ch' "$source/BlackHole/BlackHole.c"
+grep -Fq 'TapSayAudio_Create' "$source/BlackHole/BlackHole.plist"
+grep -Fq 'CC1226D1-A123-47B7-B113-5228AB089AA8' "$source/BlackHole/BlackHole.plist"
+grep -Fq 'gDevice_SampleRate                  = 48000.0' "$source/BlackHole/BlackHole.c"
+grep -Fq 'kAudioDeviceTransportTypeUSB' "$source/BlackHole/BlackHole.c"
 
-    if [[ "$IS_PROFILE" == "1" ]]; then
-        python3 "$ROOT/scripts/check-driver-artifact.py" \
-            "$DERIVED_DATA/Build/Products/Release/TapSayAudio.driver" \
-            "$ARCH" "$PROFILE"
-    else
-        python3 "$ROOT/scripts/check-driver-artifact.py" \
-            "$DERIVED_DATA/Build/Products/Release/TapSayAudio.driver" "$ARCH"
-    fi
-done
+settings=(
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=NO MACOSX_DEPLOYMENT_TARGET=14.0
+  CODE_SIGNING_ALLOWED=NO PRODUCT_NAME=TapSayAudio
+  PRODUCT_BUNDLE_IDENTIFIER=com.leafney.tapsay.audio.driver
+  GCC_PREPROCESSOR_DEFINITIONS='$(inherited) DEBUG=0'
+)
+xcodebuild -project "$source/BlackHole.xcodeproj" -scheme BlackHole \
+  -configuration Release -sdk macosx -derivedDataPath "$work/DerivedData" \
+  "${settings[@]}" -showBuildSettings > "$work/build-settings.txt"
+xcodebuild -project "$source/BlackHole.xcodeproj" -scheme BlackHole \
+  -configuration Release -sdk macosx -derivedDataPath "$work/DerivedData" \
+  "${settings[@]}" build > "$work/build.log" 2>&1
+
+output="$work/TapSayAudio.driver"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$work/DerivedData/Build/Products/Release/TapSayAudio.driver" "$output"
+strip -S "$output/Contents/MacOS/TapSayAudio"
+codesign --force --deep --sign - --timestamp=none "$output"
+
+plist="$output/Contents/Info.plist"
+binary="$output/Contents/MacOS/TapSayAudio"
+test "$(plutil -extract CFBundleIdentifier raw -o - "$plist")" = com.leafney.tapsay.audio.driver
+test "$(plutil -extract CFBundleName raw -o - "$plist")" = TapSayAudio
+test "$(plutil -extract CFBundleShortVersionString raw -o - "$plist")" = 0.1.0
+test "$(plutil -extract CFPlugInFactories.CC1226D1-A123-47B7-B113-5228AB089AA8 raw -o - "$plist")" = TapSayAudio_Create
+test "$(lipo -archs "$binary")" = arm64
+xcrun vtool -show-build "$binary" | grep -Fq 'minos 14.0'
+codesign --verify --deep --strict "$output"
+strings "$binary" | grep -Fxq 'TapSay Audio 2ch'
+shasum -a 256 "$binary" > "$work/binary.sha256"
+echo "TapSay 产物：$output"
