@@ -1,5 +1,7 @@
 # 重建阶段三：TapSay 最小适配
 
+更正（2026-10-21）：本记录只证明构建和静态身份检查通过，阶段三尚未通过完整 HAL 合同。后续 AddressSanitizer 查询主设备控制列表触发越界，冻结参考也能复现。见 `2026-10-21-hal-control-list-blocker.md`；本记录不得作为可安装或稳定性结论。
+
 依据：`docs/plan/2026-10-21-reference-driver-cleanup.md`。本阶段从固定 BlackHole v0.7.1 源码和无线麦 USB 补丁重新生成，不从旧 `Driver/TapSayAudio/` 派生。
 
 ## 交付

@@ -3,7 +3,7 @@ Related discussion: [docs/discuss/2026-10-21-reference-driver-cleanup.md](../dis
 # TapSay Audio 从无线麦参考方案重新实现 PRD
 
 日期：2026-10-21
-状态：用户已批准；按阶段实施中。
+状态：主体已批准；HAL 回调验证发现新增越界，执行暂停。第 14 节为待批准补充，不改变已批准的三项修复范围。
 所属仓库：`tapsay-audio`。
 实施分支：`feat/61021`。
 
@@ -187,3 +187,18 @@ TapSay 主程序继续允许用户选择已有的 MiRemoteV 2ch 或 BlackHole 2c
 本地 `.build/driver`、`.build/native` 中可重建缓存与 `.build/experiments/evidence`、`.build/experiments/preinstall-backup` 中的真实证据/恢复材料分开列清单；前者可在新构建通过后清理，后者在真实验收完成前保留。旧 `dist/` 参考实验包只有在新 PKG/DMG 已重建、校验并保留散列记录后才移除。不要用 `git reset --hard`、批量删除整个 `.build/` 或系统 HAL 目录完成“推翻重来”。
 
 本 PRD 是新的正式实施提案。用户明确批准后，才开始删除旧文件或编写新实现。
+
+## 14. 待批准补充：控制列表计数与读取边界
+
+2026-10-21 对冻结参考与 TapSay 最小派生源码执行 AddressSanitizer HAL 回调测试，两者均在主设备的 `kAudioObjectPropertyControlList` 正常查询中触发 `global-buffer-overflow`。默认 `gPitch_Adjust_Enabled=false`，大小回调声明六项控制对象，读取回调跳过关闭的 Pitch 后只有五项，却继续遍历以凑足六项，最终读过 `kDevice_ObjectList` 边界。按驱动自己声明的大小请求即可触发；不需要异常参数。详见 `docs/implementation/2026-10-21-hal-control-list-blocker.md`。
+
+这是前三项已批准修复之外的新增发现。现行构建与安装包不应用本节候选。批准本节后，才可将 `third_party/blackhole/proposals/control-list-safety.patch` 作为第四项正确性修复纳入驱动构建：
+
+1. 主设备控制项计数排除关闭的 Pitch；大小回调在状态锁内读取计数。
+2. 控制项读取同时限制对象数组长度和用户提供的容量；按请求的 global/input/output scope 筛选。
+3. 同一个状态锁快照内读取 Pitch 状态、筛选并复制；返回实际写入字节数。隐藏设备保持自己的控制对象列表。
+4. 不修改 IO、时间戳、采样率、缓冲、音频格式或混音算法。源码差异和测试报告单独保留。
+
+批准后的验收：主/隐藏设备 × Pitch 开/关 × global/input/output × 容量 0 字节、1 字节、一个对象、准确容量、过量容量，共 60 项，核对返回对象顺序、实际字节数及尾部哨兵；AddressSanitizer 无越界。13 项率表、双声道 Float32 和初始 48 kHz 对照仍通过。候选已在独立进程通过这些用例，但尚未获准进入交付基线。
+
+阶段恢复要求：重新签收阶段三 HAL 合同；阶段四按原要求从新源码重写独立安装工具并完成隔离故障注入，不能继续沿用旧 Swift 事务实现当作已完成；修复离线构建、准确绑定本次产物、纯源码归档和元数据权威值等已记录缺口。阶段五清理必须等待这些门槛通过，阶段六不得安装当前失败候选。

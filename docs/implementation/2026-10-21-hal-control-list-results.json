@@ -1,0 +1,37 @@
+[
+  {
+    "label": "reference-formats",
+    "source_sha256": "bc070e03a438d57849719ee4f7193fea7f98ea401cd125aa9dbf813328c447be",
+    "exit_code": 0,
+    "expected_exit": 0,
+    "log_sha256": "f9ce2d234bcbe0a56a9e6c526b8a46322071a714ca7ca81b3e42c8124554460c"
+  },
+  {
+    "label": "reference-control",
+    "source_sha256": "bc070e03a438d57849719ee4f7193fea7f98ea401cd125aa9dbf813328c447be",
+    "exit_code": 134,
+    "expected_exit": 134,
+    "log_sha256": "13c13862ddbdbc42c0b9ac70c6fa7b324e05d36f830a2e36ae0155b810d465f2"
+  },
+  {
+    "label": "tapsay-control",
+    "source_sha256": "cc49a79063c1327c47a8f1973617229830a80dd6c4b7f404a9dfea5ecbedd222",
+    "exit_code": 134,
+    "expected_exit": 134,
+    "log_sha256": "6e2fe8abbc8ce224b15f436e91d8adc99fa99e49c3455c533dc6df2eb09c64c5"
+  },
+  {
+    "label": "proposal-control",
+    "source_sha256": "f5be4066b7e46d0f051cb96d3006810a373007323900fbbfc2aca98994c05354",
+    "exit_code": 0,
+    "expected_exit": 0,
+    "log_sha256": "a468f370020871431b4a173232fec6522b7e717a7d2e14aba9e7d4af57837ede"
+  },
+  {
+    "label": "proposal-formats",
+    "source_sha256": "f5be4066b7e46d0f051cb96d3006810a373007323900fbbfc2aca98994c05354",
+    "exit_code": 0,
+    "expected_exit": 0,
+    "log_sha256": "4c2b94221cd6d8a94a7cdf1ecbcea879e6dc01dd56cdf6d387704ecba0ea9751"
+  }
+]
