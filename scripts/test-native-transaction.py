@@ -14,7 +14,7 @@ META_PATH = ROOT / "config/product.json"
 META = json.loads(META_PATH.read_text(encoding="utf-8"))
 ARCH = subprocess.check_output(["/usr/bin/uname", "-m"], text=True).strip()
 TOOL = ROOT / f".build/native/{ARCH}/TapSayAudioTransaction"
-DRIVER = ROOT / f".build/driver/{ARCH}/Build/Products/Release/TapSayAudio.driver"
+DRIVER = Path(json.loads((ROOT / ".build/latest-driver.json").read_text())["bundle"])
 
 
 def run(tool, root, metadata, *args, success=True):

@@ -19,6 +19,9 @@ UNINSTALLER_NAME="$(read_meta uninstaller.display_name)"
 ARCHES=(arm64)
 
 mkdir -p "$OUT"
+mkdir -p "$ROOT/.build"
+PACKAGE_WORK="$(mktemp -d "$ROOT/.build/package-arm64.XXXXXX")"
+BUILD_RESULT="$PACKAGE_WORK/driver-result.json"
 rm -f "$OUT/TapSayAudio-2ch-$VERSION"*.pkg \
       "$OUT/TapSayAudio-2ch-$VERSION"*.dmg \
       "$OUT/arm64.pkg" "$OUT/x86_64.pkg" \
@@ -27,16 +30,17 @@ python3 "$ROOT/scripts/check-metadata.py"
 mkdir -p "$ROOT/.build/native"
 bash "$ROOT/scripts/build-native-tools.sh"
 python3 "$ROOT/scripts/check-uninstaller.py"
-bash "$ROOT/scripts/build-driver.sh"
+TAPSAY_BUILD_RESULT="$BUILD_RESULT" bash "$ROOT/scripts/build-driver.sh"
 
 for ARCH in "${ARCHES[@]}"; do
-    BUNDLE="$(find "$ROOT/.build" -path '*/tapsay-driver-arm64.*/TapSayAudio.driver' -type d -print | sort | tail -1)"
+    BUNDLE="$(/usr/bin/plutil -extract bundle raw -o - "$BUILD_RESULT")"
     test -n "$BUNDLE" && test -d "$BUNDLE"
+    test "$(shasum -a 256 "$BUNDLE/Contents/MacOS/TapSayAudio" | awk '{print $1}')" = "$(plutil -extract driver_sha256 raw -o - "$BUILD_RESULT")"
     SCRIPTS="$OUT/scripts-$ARCH"
     EMPTY_ROOT="$OUT/empty-root-$ARCH"
     DMGROOT="$OUT/dmg-$ARCH"
-    PKG="$OUT/TapSayAudio-2ch-$VERSION.pkg"
-    FINAL_PKG="$OUT/TapSayAudio-2ch-$VERSION-$ARCH.pkg"
+    PKG="$PACKAGE_WORK/TapSayAudio-2ch-$VERSION.pkg"
+    FINAL_PKG="$OUT/TapSayAudio-2ch-$VERSION.pkg"
     FINAL_DMG="$OUT/TapSayAudio-2ch-$VERSION-$ARCH.dmg"
 
     rm -rf "$SCRIPTS" "$DMGROOT" "$EMPTY_ROOT"
@@ -91,8 +95,9 @@ done
 bash "$ROOT/scripts/build-source-archive.sh"
 (
     cd "$OUT"
-    /usr/bin/shasum -a 256 TapSayAudio-2ch-"$VERSION"-arm64.pkg \
+    /usr/bin/shasum -a 256 TapSayAudio-2ch-"$VERSION".pkg \
         TapSayAudio-2ch-"$VERSION"-arm64.dmg \
         TapSayAudio-2ch-"$VERSION"-source.tar.gz > SHA256SUMS.txt
 )
 python3 "$ROOT/scripts/check-release-readiness.py"
+cp "$BUILD_RESULT" "$OUT/BUILD-RESULT.json"

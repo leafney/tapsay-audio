@@ -111,7 +111,8 @@ def main():
         if profile:
             require(PROFILES["device2"]["uid"] in strings, "驱动隐藏设备 UID 缺失")
             require(PROFILES["device2"]["name"] in strings, "驱动隐藏设备名称缺失")
-        for forbidden in ("BlackHole", "MiRemoteV", "Q5C99V536K"):
+        # Upstream private function names and copyright are retained for provenance.
+        for forbidden in ("MiRemoteV", "Q5C99V536K", "audio.existential.BlackHole2ch"):
             require(forbidden not in strings, f"成品包含其他产品标识：{forbidden}")
 
         scripts = expanded / "Scripts"

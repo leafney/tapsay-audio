@@ -1,29 +1,17 @@
-# BlackHole 上游源码说明
+# BlackHole 固定参考来源
 
-- 官方仓库：`https://github.com/ExistentialAudio/BlackHole`
-- 固定版本：`v0.7.1`
-- 完整提交：`e2b22aaaba4e507a097131704bf96dabc004d9cf`
-- GitHub 源码归档 SHA-256：`5d523d51165873ee339bfb670694de61ad2ce84a0c72a6df32dbb283313f26b0`
-- 许可证及上游版权/品牌声明：本目录的 `LICENSE`
-- 本项目保留的派生文件：`Driver/TapSayAudio/TapSayAudio.c`、`TapSayAudio.plist`、Xcode 工程和 `Driver/TapSayAudioTests/main.c`
+- 官方仓库：https://github.com/ExistentialAudio/BlackHole
+- 固定版本：v0.7.1，提交 `e2b22aaaba4e507a097131704bf96dabc004d9cf`。
+- 原始源码归档 SHA-256：`5d523d51165873ee339bfb670694de61ad2ce84a0c72a6df32dbb283313f26b0`。
+- `upstream/` 原样保存构建所需文本；`SOURCE-SHA256.json` 固定原始文件与补丁散列。
+- 上游完整版权/许可见 `LICENSE`；GPLv3 源码不包含对官方预编译包及品牌素材的额外授权。
 
-## TapSay 修改记录
+## 当前派生方式（2026-10-21）
 
-2026-10-19 首次派生：
+先应用无线麦固定 USB/工厂补丁，再应用 TapSay 独立身份补丁。只替换产品身份、版本和品牌资源，保留原始版权。默认 48000 Hz，保留参考完整采样率、隐藏第二设备、Box Virtual、主设备 USB 和音频算法。早期三项属性修复及后续控制列表修复均不进入本轮，按用户要求在真机部署后再考虑。
 
-- 将驱动符号及工程目标改为 TapSay Audio 自有名称；保留 C 源文件原始版权行，并在修改过的源码/工程文件中记录修改日期。
-- 设备 UID、Box UID、Model UID、驱动 Bundle ID、插件工厂 UUID、显示名、制造商和音频格式由 `config/product.json` 生成或传入构建。
-- 移除未经授权的 BlackHole 图标和上游安装资源；驱动不再宣告依赖图标资源。
-- 把驱动与 Box 上报的 transport type 改为 USB 类型，遵循获批 PRD。这里仅调整 CoreAudio 属性。
-- 将插件/Box 的 DeviceList 和 UID 翻译限制为一个设备；不公布上游隐藏的第二个设备。
-- 删除上游伪序列号，避免把虚拟声卡包装成有真实硬件序列号的设备。
-- 将默认采样率改为 16,000 Hz，只保留 16,000、44,100、48,000 Hz。
-- 修正插件 `OwnedObjects` 数组第二项写入位置，避免返回未初始化对象 ID。
+`scripts/build-driver.sh` 从这些本地源码独立构建；`check-reference-source.py` 核对除允许的身份改动之外 C 逐字节相同。TapSay 图标由本仓库 `Tools/BuildIcon.swift` 生成，不分发上游品牌图标。修改通过身份补丁、本说明及对应源码归档记录。
 
-`Driver/TapSayAudio/TapSayAudio.c` 源码仍包含上游开发者的版权声明。后续修改继续保留该声明并追加日期说明。本文件和散列只用于来源追踪，不能替代正式发行前对所有实际载荷文件、许可证及品牌素材的复核。
+无线麦参考仓库固定提交：`c9fabd1ef53e1a311dab4518a70693494631368b`。参考补丁 SHA-256：`51dea42771bc432573433f76a0bfb140d9463db112d568f0192e97b5b7a2dc5f`。主程序、品牌图片与上游官方二进制不进入独立声卡分发。
 
-## 当前派生交付状态
-
-- 固定上游驱动源码、上游 LICENSE、必要构建材料和修改记录均已纳入仓库。
-- 开发源码归档包含本仓库驱动、安装事务、卸载 APP 源码及构建脚本。
-- 分发载荷的最终逐文件许可审查、签名、公证和 Release 发布仍未完成。
+实际部署结果见 `docs/implementation/2026-10-21-reference-only-deployment.md`。当前为未签名、未公证的本地验证包；正式发布前仍需核对最终载荷、对应源码与下载字节。
