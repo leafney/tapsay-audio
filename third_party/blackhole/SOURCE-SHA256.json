@@ -9,5 +9,6 @@
   "upstream/VERSION": "902311c7bb38fa1658ff403def6158ee7378fe9d6e2e284fa1c38735c31bd30b",
   "blackhole-device-usb.patch": "51dea42771bc432573433f76a0bfb140d9463db112d568f0192e97b5b7a2dc5f",
   "tapsay-identity.patch": "e99ad04f5ba0e8a5ce6e6a44b4d480143ebab2af5fb49e4295b3dcfd06aa216f",
-  "plugin-properties.patch": "0cafe5b3d19aeb487f1f6d4b467d46131235ae20b73304b592056905df695bad"
+  "plugin-properties.patch": "0cafe5b3d19aeb487f1f6d4b467d46131235ae20b73304b592056905df695bad",
+  "control-list-properties.patch": "7d406f9a48f6b6dba21bf5bcd678796177df8aa049a2524eb971fbd525119543"
 }

@@ -36,13 +36,14 @@ class DriverSourceTests(unittest.TestCase):
             self.assertNotEqual(self.audit(source).returncode, 0)
 
     def test_missing_fix_is_rejected(self):
-        with tempfile.TemporaryDirectory() as t:
-            source = Path(t) / 'source'
-            prepare.prepare(source)
-            subprocess.run(['/usr/bin/patch', '--batch', '-R', '-F', '0', '-p1', '-i',
-                            str(driver_sources.BASE / driver_sources.PROPERTY_PATCHES[-1]),
-                            '-d', str(source)], check=True, stdout=subprocess.DEVNULL)
-            self.assertNotEqual(self.audit(source).returncode, 0)
+        for patch in driver_sources.PROPERTY_PATCHES:
+            with self.subTest(patch=patch), tempfile.TemporaryDirectory() as t:
+                source = Path(t) / 'source'
+                prepare.prepare(source)
+                subprocess.run(['/usr/bin/patch', '--batch', '-R', '-F', '0', '-p1', '-i',
+                                str(driver_sources.BASE / patch),
+                                '-d', str(source)], check=True, stdout=subprocess.DEVNULL)
+                self.assertNotEqual(self.audit(source).returncode, 0)
 
     def test_changed_or_unpinned_patch_is_rejected(self):
         with tempfile.TemporaryDirectory() as t:

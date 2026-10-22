@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 BASE = Path(__file__).resolve().parents[1] / 'third_party/blackhole'
-PROPERTY_PATCHES = ('plugin-properties.patch',)
+PROPERTY_PATCHES = ('plugin-properties.patch', 'control-list-properties.patch')
 PATCHES = ('blackhole-device-usb.patch', 'tapsay-identity.patch', *PROPERTY_PATCHES)
 
 

@@ -98,47 +98,58 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "control-matrix") == 0) {
         const AudioObjectID objects[] = {kObjectID_Device, kObjectID_Device2};
         const AudioObjectPropertyScope scopes[] = {kAudioObjectPropertyScopeGlobal,
-            kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput};
+            kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, 'test'};
         unsigned cases = 0;
-        for (unsigned enabled = 0; enabled < 2; enabled++) {
-            assert((*gAudioServerPlugInDriverRef)->PerformDeviceConfigurationChange(
-                gAudioServerPlugInDriverRef, kObjectID_Device,
-                enabled ? ChangeAction_EnablePitchControl : ChangeAction_DisablePitchControl,
-                NULL) == noErr);
-            for (unsigned device = 0; device < 2; device++) {
-                for (unsigned scope = 0; scope < 3; scope++) {
-                    AudioObjectID expected[6];
-                    unsigned count = 0;
-                    if (scope == 0 || scope == 1) {
-                        expected[count++] = kObjectID_Volume_Input_Master;
-                        expected[count++] = kObjectID_Mute_Input_Master;
-                    }
-                    if (scope == 0 || scope == 2) {
-                        expected[count++] = kObjectID_Volume_Output_Master;
-                        expected[count++] = kObjectID_Mute_Output_Master;
-                        if (enabled && device == 0) expected[count++] = kObjectID_Pitch_Adjust;
-                    }
-                    if (scope == 0 && device == 0) expected[count++] = kObjectID_ClockSource;
-                    AudioObjectPropertyAddress address = {kAudioObjectPropertyControlList,
-                        scopes[scope], kAudioObjectPropertyElementMain};
-                    UInt32 size = 0;
-                    assert((*gAudioServerPlugInDriverRef)->GetPropertyDataSize(
-                        gAudioServerPlugInDriverRef, objects[device], 0, &address,
-                        0, NULL, &size) == noErr);
-                    assert(size == count * sizeof(AudioObjectID));
-                    UInt32 capacities[] = {0, 1, 4, size, size + 16};
-                    for (unsigned capacity = 0; capacity < 5; capacity++) {
-                        AudioObjectID ids[16];
-                        for (unsigned i = 0; i < 16; i++) ids[i] = 0xa55aa55a;
-                        UInt32 written = 0;
-                        assert(get(objects[device], address.mSelector, address.mScope,
-                                   capacities[capacity], &written, ids) == noErr);
-                        UInt32 returned = capacities[capacity] / sizeof(AudioObjectID);
-                        if (returned > count) returned = count;
-                        assert(written == returned * sizeof(AudioObjectID));
-                        for (unsigned i = 0; i < returned; i++) assert(ids[i] == expected[i]);
-                        for (unsigned i = returned; i < 16; i++) assert(ids[i] == 0xa55aa55a);
-                        cases++;
+        for (unsigned sizeEnabled = 0; sizeEnabled < 2; sizeEnabled++) {
+            for (unsigned readEnabled = 0; readEnabled < 2; readEnabled++) {
+                for (unsigned device = 0; device < 2; device++) {
+                    for (unsigned scope = 0; scope < 4; scope++) {
+                        AudioObjectPropertyAddress address = {kAudioObjectPropertyControlList,
+                            scopes[scope], kAudioObjectPropertyElementMain};
+                        UInt32 size = 0;
+                        assert((*gAudioServerPlugInDriverRef)->PerformDeviceConfigurationChange(
+                            gAudioServerPlugInDriverRef, kObjectID_Device,
+                            sizeEnabled ? ChangeAction_EnablePitchControl : ChangeAction_DisablePitchControl,
+                            NULL) == noErr);
+                        assert((*gAudioServerPlugInDriverRef)->GetPropertyDataSize(
+                            gAudioServerPlugInDriverRef, objects[device], 0, &address,
+                            0, NULL, &size) == noErr);
+                        UInt32 sizeCount = scope == 3 ? 0 : (scope == 0 ? 4 : 2);
+                        if (device == 0 && scope == 0) sizeCount++;
+                        if (device == 0 && (scope == 0 || scope == 2) && sizeEnabled) sizeCount++;
+                        assert(size == sizeCount * sizeof(AudioObjectID));
+                        // HAL may change enabled controls between size and data queries.
+                        assert((*gAudioServerPlugInDriverRef)->PerformDeviceConfigurationChange(
+                            gAudioServerPlugInDriverRef, kObjectID_Device,
+                            readEnabled ? ChangeAction_EnablePitchControl : ChangeAction_DisablePitchControl,
+                            NULL) == noErr);
+                        AudioObjectID expected[6];
+                        unsigned count = 0;
+                        if (scope == 0 || scope == 1) {
+                            expected[count++] = kObjectID_Volume_Input_Master;
+                            expected[count++] = kObjectID_Mute_Input_Master;
+                        }
+                        if (scope == 0 || scope == 2) {
+                            expected[count++] = kObjectID_Volume_Output_Master;
+                            expected[count++] = kObjectID_Mute_Output_Master;
+                            if (readEnabled && device == 0) expected[count++] = kObjectID_Pitch_Adjust;
+                        }
+                        if (scope == 0 && device == 0) expected[count++] = kObjectID_ClockSource;
+                        // Every byte capacity includes partial IDs, exact and oversized buffers.
+                        for (UInt32 capacity = 0; capacity <= 40; capacity++) {
+                            AudioObjectID ids[16];
+                            for (unsigned i = 0; i < 16; i++) ids[i] = 0xa55aa55a;
+                            UInt32 written = 0;
+                            assert(get(objects[device], address.mSelector, address.mScope,
+                                       capacity, &written, &ids[1]) == noErr);
+                            UInt32 returned = capacity / sizeof(AudioObjectID);
+                            if (returned > count) returned = count;
+                            assert(written == returned * sizeof(AudioObjectID));
+                            for (unsigned i = 0; i < returned; i++) assert(ids[i + 1] == expected[i]);
+                            assert(ids[0] == 0xa55aa55a);
+                            for (unsigned i = returned + 1; i < 16; i++) assert(ids[i] == 0xa55aa55a);
+                            cases++;
+                        }
                     }
                 }
             }

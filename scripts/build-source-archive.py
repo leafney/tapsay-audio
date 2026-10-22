@@ -23,6 +23,7 @@ def main():
         'third_party/blackhole/UPSTREAM-VERSION', 'third_party/blackhole/SOURCE-SHA256.json',
         'third_party/blackhole/blackhole-device-usb.patch', 'third_party/blackhole/tapsay-identity.patch',
         'third_party/blackhole/plugin-properties.patch',
+        'third_party/blackhole/control-list-properties.patch',
         'docs/plan/2026-10-22-driver-property-fixes.md',
         'docs/discuss/2026-10-22-driver-property-fixes.md',
         'docs/plan/2026-10-21-reference-driver-cleanup.md',

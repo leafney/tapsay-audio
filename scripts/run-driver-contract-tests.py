@@ -22,6 +22,7 @@ def main():
         ['python3', str(ROOT / 'scripts/check-driver-artifact.py'), str(bundle), 'arm64'],
         ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'formats'],
         ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'plugin-properties'],
+        ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'control-matrix'],
     ]:
         subprocess.run(command, check=True)
 
