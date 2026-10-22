@@ -22,6 +22,16 @@ TapSay 配套独立虚拟声卡，系统设备名为 **TapSay Audio 2ch**。
 
 卸载提示会区分设备已消失、需要重启、无法确认及历史材料部分保留。工具不会自动重启 Mac。当前产物用于本地人工测试，尚未签名、公证或公开发行，没有正式下载地址。TapSay 主程序的 `TapSayAudioDownloadURL` 需在正式发布后配置。
 
+安装后只读等待设备枚举约五秒，结果写入安装日志及 `/Library/Application Support/TapSay Audio/install-state.json`。设备未出现时提示重启或待确认，不因枚举延迟回滚已部署文件；设备出现也不表示真实音频链路已通过。
+
+开发排查时，可导出只读诊断报告：
+
+```sh
+.build/native/arm64/TapSayAudioDiagnose > /tmp/tapsay-audio-diagnose.json
+```
+
+报告包含系统、设备名义采样率、输入输出物理/虚拟格式、磁盘驱动版本与散列；不改控件、采样率或路由。`null` 表示无法读取。磁盘散列不能证明系统当前加载的实例相同。合成环回工具独立运行，默认 48 kHz，构包和普通诊断不会启动它。
+
 ## 构建与验证
 
 版本号及构建号只在 `config/product.json` 配置。构建仅使用 `third_party/blackhole/upstream`、固定 USB 补丁和身份补丁，不接受实验 profile。

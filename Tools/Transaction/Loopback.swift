@@ -231,7 +231,7 @@ func makeFormat(rate: Double) -> AudioStreamBasicDescription {
 func main() throws {
     let args = Array(CommandLine.arguments.dropFirst())
     guard args.count <= 2,
-          let rate = Double(args.first ?? "16000"),
+          let rate = Double(args.first ?? "48000"),
           [16000.0, 44100.0, 48000.0].contains(rate) else {
         try fail("用法：TapSayAudioLoopback [16000|44100|48000] [1 到 30 秒]")
     }

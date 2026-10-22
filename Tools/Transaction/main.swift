@@ -221,6 +221,12 @@ struct Transaction {
                     "verification_status": "not_run", "audio_chain_status": "not_run"
                 ]
                 result["activation_status"] = activate()
+                let deviceStatus: UninstallDeviceStatus = testing ? .notChecked : waitForInstallDeviceAppearance()
+                result["device_status"] = deviceStatus.rawValue
+                if !testing {
+                    result["verification_status"] = deviceStatus == .present ? "device_present"
+                        : (deviceStatus == .absent ? "restart_required" : "unverified")
+                }
                 try writeJSON(result, state)
                 record = try record.updating(phase: .committed, terminal: .success,
                                              terminalResult: .deployed, cleanup: .pending,
@@ -240,7 +246,10 @@ struct Transaction {
                     }
                     throw Failure("新版本已部署，但本次临时材料清理未完成；请重新运行安装或卸载工具清理：\(error)")
                 }
-                print("驱动文件已部署；设备就绪待核验，真实音频链路未验证。\(result["activation_status"]!)")
+                let deviceMessage = deviceStatus == .present ? "系统已枚举设备"
+                    : (deviceStatus == .absent ? "设备尚未出现，请保存工作并手动重启 Mac 后检查"
+                       : "设备状态待确认；必要时保存工作并手动重启 Mac 后检查")
+                print("驱动文件已部署；\(deviceMessage)。真实音频链路未验证。")
             } catch {
                 if record.phase == .committed {
                     throw error

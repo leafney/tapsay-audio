@@ -42,3 +42,12 @@ func waitForUninstallDeviceRemoval() -> UninstallDeviceStatus {
                                     _ = CFRunLoopRunInMode(.defaultMode, 0.001, true)
                                 })
 }
+
+func waitForInstallDeviceAppearance() -> UninstallDeviceStatus {
+    verifyInstallDeviceAppearance(read: uninstallDeviceStatus,
+                                 now: { ProcessInfo.processInfo.systemUptime },
+                                 pause: {
+                                     Thread.sleep(forTimeInterval: 0.25)
+                                     _ = CFRunLoopRunInMode(.defaultMode, 0.001, true)
+                                 })
+}

@@ -124,7 +124,13 @@ struct UninstallResult: Codable {
             guard valid else { throw NSError(domain: "TapSayAudioUninstall", code: 3) }
             let cleanupValid: Bool
             switch result.status {
-            case .removed, .notInstalled:
+            case .removed:
+                cleanupValid = result.deviceStatus == .absent
+                    && (([.notNeeded, .complete].contains(result.cleanupStatus)
+                         && result.remainingMaterialCount == 0)
+                        || ([.partial, .blocked].contains(result.cleanupStatus)
+                            && result.remainingMaterialCount > 0))
+            case .notInstalled:
                 cleanupValid = result.deviceStatus == .absent
                     && [.notNeeded, .complete].contains(result.cleanupStatus)
                     && result.remainingMaterialCount == 0
@@ -167,6 +173,17 @@ struct UninstallResult: Codable {
         case .failed: return "卸载未完成"
         }
     }
+}
+
+func verifyInstallDeviceAppearance(read: () -> UninstallDeviceStatus,
+                                   now: () -> TimeInterval,
+                                   pause: () -> Void) -> UninstallDeviceStatus {
+    let deadline = now() + 5
+    repeat {
+        if read() == .present { return .present }
+        pause()
+    } while now() < deadline
+    return read()
 }
 
 func verifyUninstallDeviceRemoval(read: () -> UninstallDeviceStatus,

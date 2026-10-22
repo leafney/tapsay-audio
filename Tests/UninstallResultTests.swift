@@ -87,6 +87,33 @@ import Foundation
             driverAbsent: true, receiptAbsent: true, stateAbsent: true,
             deviceStatus: .unavailable, wasInstalled: true, cleanup: blocked
         )
+        for cleanup in [partial, blocked, complete] {
+            for installed in [true, false] {
+                let result = UninstallResult.outcome(
+                    driverAbsent: true, receiptAbsent: true, stateAbsent: true,
+                    deviceStatus: .absent, wasInstalled: installed, cleanup: cleanup)
+                let decoded = try UninstallResult.decode(JSONEncoder().encode(result))
+                check(decoded.title == result.title && decoded.remainingPaths == result.remainingPaths,
+                      "历史清理结果必须可往返解码并保留真实路径")
+            }
+        }
+        _ = try UninstallResult.decode(JSONEncoder().encode(unverified))
+        for presence in [UninstallDeviceStatus.absent, .unavailable, .notChecked] {
+            for cleanup in [partial, blocked] {
+                let result = UninstallResult.outcome(
+                    driverAbsent: true, receiptAbsent: true, stateAbsent: true,
+                    deviceStatus: presence, wasInstalled: true, cleanup: cleanup)
+                _ = try UninstallResult.decode(JSONEncoder().encode(result))
+            }
+        }
+        let partialObject = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(removedWithPartial)) as! [String: Any]
+        for paths in [["relative/path"], [""], ["/one", "/one"]] {
+            var changed = partialObject
+            changed["remainingPaths"] = paths
+            changed["remainingMaterialCount"] = paths.count
+            invalid.append(try JSONSerialization.data(withJSONObject: changed))
+        }
         check(unverified.status == .unverified && unverified.title == "卸载生效状态待确认",
               "设备状态不明不得显示完成")
         var contradictory = object
@@ -131,6 +158,20 @@ import Foundation
         check(poll([.present, .unavailable, .absent, .absent]) == .absent, "最终稳定消失应通过")
         check(poll(Array(repeating: .present, count: 20) + [.absent]) == .unavailable,
               "截止时仅一次消失不能确认")
+        func installPoll(_ sequence: [UninstallDeviceStatus]) -> UninstallDeviceStatus {
+            var clock: TimeInterval = 0
+            var index = 0
+            return verifyInstallDeviceAppearance(read: {
+                defer { index += 1 }
+                return sequence[min(index, sequence.count - 1)]
+            }, now: { clock }, pause: { clock += 0.25 })
+        }
+        check(installPoll([.present]) == .present, "已枚举应立即返回")
+        check(installPoll([.absent, .unavailable, .present]) == .present, "延迟枚举应识别")
+        check(installPoll([.absent]) == .absent, "超时未出现不能当作成功")
+        check(installPoll([.unavailable]) == .unavailable, "读取失败不能当作设备不存在")
+        check(installPoll(Array(repeating: .absent, count: 20) + [.present]) == .present,
+              "截止时出现仍应识别")
         print("卸载参数、结果判定、异常响应及设备等待测试通过")
     }
 }
