@@ -1,5 +1,7 @@
 TapSay Audio 2ch
 
+本包版本：@VERSION@。本轮修复驱动对象列表、UID 查询和控制列表边界；默认 48 kHz、双声道 Float32 及音频 IO 算法不变，真实音频链路仍需安装后验证。
+
 许可文件
 - GPLv3 完整条款见 GPL-3.0.txt。
 - BlackHole 上游来源和第三方许可说明见“第三方许可说明.md”。

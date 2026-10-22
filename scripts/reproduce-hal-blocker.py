@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the frozen reference defect and test an unshipped proposal."""
+"""Historical reproduction: compare the frozen defect with the original proposal."""
 import hashlib
 import json
 import shutil
@@ -60,7 +60,7 @@ def main():
         if result.returncode != expected or (expected and "global-buffer-overflow" not in result.stdout):
             raise RuntimeError("复现结果不符，查看：" + str(log))
         print(label + "：退出码 " + str(result.returncode), flush=True)
-    print("基线 HAL 验证失败；候选补丁通过 60 项控制列表用例。候选未进入构建或安装包。")
+    print("历史参考缺陷已复现，原候选通过当前控制矩阵。正式构建使用独立且固定散列的属性补丁。")
     print("证据：" + str(work.relative_to(ROOT)))
     return 0
 

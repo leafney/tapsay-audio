@@ -1,5 +1,16 @@
 --- a/BlackHole/BlackHole.c
 +++ b/BlackHole/BlackHole.c
+@@ -2,6 +2,10 @@
+      File: BlackHole.c
+   
+  Copyright (C) 2019 Existential Audio Inc.
++ 
++ TapSay Audio derivative: independent product identity.
++ Modified 2026-10-22: plug-in object/UID queries and bounded,
++ scoped control lists. See UPSTREAM.md and the distributed patches.
+   
+ */
+ /*==================================================================================================
 @@ -1461,7 +1461,7 @@
  			if(theNumberItemsToFetch > 1)
  			{

@@ -58,13 +58,17 @@ xcrun vtool -show-build "$binary" | grep -Fq 'minos 14.0'
 codesign --verify --deep --strict "$output"
 strings "$binary" | grep -Fxq 'TapSay Audio 2ch'
 shasum -a 256 "$binary" > "$work/binary.sha256"
-python3 - "$output" "$source" "${TAPSAY_BUILD_RESULT:-$root/.build/latest-driver.json}" <<'PY'
+python3 - "$output" "$source" "${TAPSAY_BUILD_RESULT:-$root/.build/latest-driver.json}" "$root" <<'PY'
 import hashlib, json, pathlib, sys
-bundle, source, result = map(pathlib.Path, sys.argv[1:])
+bundle, source, result, root = map(pathlib.Path, sys.argv[1:])
+sys.path.insert(0, str(root / 'scripts'))
+from driver_sources import PATCHES, verify_inputs
+hashes = verify_inputs()
 binary = bundle / 'Contents/MacOS/TapSayAudio'
 data = {'bundle': str(bundle), 'source': str(source), 'architecture': 'arm64',
         'driver_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-        'driver_mode': 'reference-with-property-fixes'}
+        'driver_mode': 'reference-with-property-fixes',
+        'patches_sha256': {name: hashes[name] for name in PATCHES}}
 result.parent.mkdir(parents=True, exist_ok=True)
 result.write_text(json.dumps(data, indent=2)+'\n')
 PY

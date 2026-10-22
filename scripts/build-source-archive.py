@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Archive only sources required by the current reference-only build."""
+"""Archive the fixed reference, reviewed fixes and complete build/test tooling."""
 import io
 import json
 import os

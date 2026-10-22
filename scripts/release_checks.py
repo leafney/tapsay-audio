@@ -51,6 +51,12 @@ def audit(directory, metadata, run=command):
                 required = ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'config/product.json',
                     'third_party/blackhole/LICENSE', 'third_party/blackhole/upstream/BlackHole/BlackHole.c',
                     'third_party/blackhole/tapsay-identity.patch', 'Tools/BuildIcon.swift',
+                    'third_party/blackhole/plugin-properties.patch',
+                    'third_party/blackhole/control-list-properties.patch',
+                    'third_party/blackhole/SOURCE-SHA256.json',
+                    'scripts/driver_sources.py', 'Tests/DriverContract.c', 'Tests/DriverSourceTests.py',
+                    'scripts/prepare-driver-source.py', 'scripts/check-reference-source.py',
+                    'scripts/test-hal-contract.sh',
                     'Tools/Transaction/main.swift', 'Tools/Transaction/Uninstaller.swift',
                     'scripts/build-driver.sh', 'scripts/build-native-tools.sh', 'scripts/product.py',
                     'scripts/build-packages.py', 'scripts/release_checks.py', 'scripts/publish-artifacts.py']

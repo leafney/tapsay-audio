@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect the actual reference-only driver bundle."""
+"""Inspect the actual driver bundle selected by the build result."""
 import plistlib
 import subprocess
 import sys
