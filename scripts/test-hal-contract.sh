@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-test "$#" = 2 || { echo "用法：$0 SOURCE_C formats|control-list|control-matrix" >&2; exit 2; }
+test "$#" = 2 || { echo "用法：$0 SOURCE_C formats|plugin-properties|control-list|control-matrix" >&2; exit 2; }
 driver_source="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 mkdir -p "$root/.build/contract-tests"
 test_binary="$(mktemp "$root/.build/contract-tests/hal.XXXXXX")"

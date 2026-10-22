@@ -64,7 +64,7 @@ bundle, source, result = map(pathlib.Path, sys.argv[1:])
 binary = bundle / 'Contents/MacOS/TapSayAudio'
 data = {'bundle': str(bundle), 'source': str(source), 'architecture': 'arm64',
         'driver_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-        'driver_mode': 'reference-identity-only'}
+        'driver_mode': 'reference-with-property-fixes'}
 result.parent.mkdir(parents=True, exist_ok=True)
 result.write_text(json.dumps(data, indent=2)+'\n')
 PY

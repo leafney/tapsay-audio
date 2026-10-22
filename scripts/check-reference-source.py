@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require byte-identical C after normalizing the permitted product identity edits."""
+"""Compare reference C plus approved fixes, allowing only product identity edits."""
 import hashlib
 import json
 from pathlib import Path
@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from driver_sources import BASE, PROPERTY_PATCHES, verify_inputs, apply_patches
 
 ROOT = Path(__file__).resolve().parents[1]
 IDENTITY_MACROS = {
@@ -33,19 +34,23 @@ def normalize(text):
 
 
 def main():
+    hashes = verify_inputs()
     source = Path(sys.argv[1]) / "BlackHole/BlackHole.c"
     with tempfile.TemporaryDirectory(prefix="tapsay-source-audit-") as directory:
         reference = Path(directory) / "reference"
-        shutil.copytree(ROOT / "third_party/blackhole/upstream", reference)
-        subprocess.run(["patch", "-p1", "-i", str(ROOT / "third_party/blackhole/blackhole-device-usb.patch"),
-                        "-d", str(reference)], check=True, stdout=subprocess.DEVNULL)
+        shutil.copytree(BASE / "upstream", reference)
+        apply_patches(reference, ('blackhole-device-usb.patch',))
+        baseline = (reference / "BlackHole/BlackHole.c").read_bytes()
+        apply_patches(reference, PROPERTY_PATCHES)
         expected = (reference / "BlackHole/BlackHole.c").read_text()
         actual = source.read_text()
         if normalize(expected) != normalize(actual):
-            raise SystemExit("参考一致性失败：C 中存在产品身份之外的改动")
-    print(json.dumps({"status": "passed", "mode": "reference-identity-only",
+            raise SystemExit("参考一致性失败：C 中存在产品身份及明确属性补丁之外的改动")
+    print(json.dumps({"status": "passed", "mode": "reference-with-property-fixes",
+                      "reference_sha256": hashlib.sha256(baseline).hexdigest(),
                       "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-                      "algorithm_changes": 0}, indent=2))
+                      "property_patches": {name: hashes[name] for name in PROPERTY_PATCHES},
+                      "audio_io_changes": 0}, indent=2))
 
 
 if __name__ == "__main__":

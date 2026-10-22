@@ -22,6 +22,9 @@ def main():
         'third_party/blackhole/LICENSE', 'third_party/blackhole/UPSTREAM.md',
         'third_party/blackhole/UPSTREAM-VERSION', 'third_party/blackhole/SOURCE-SHA256.json',
         'third_party/blackhole/blackhole-device-usb.patch', 'third_party/blackhole/tapsay-identity.patch',
+        'third_party/blackhole/plugin-properties.patch',
+        'docs/plan/2026-10-22-driver-property-fixes.md',
+        'docs/discuss/2026-10-22-driver-property-fixes.md',
         'docs/plan/2026-10-21-reference-driver-cleanup.md',
         'docs/discuss/2026-10-21-reference-driver-cleanup.md',
         'docs/plan/2026-10-22-peripheral-improvements.md',
@@ -35,7 +38,7 @@ def main():
         'build-native-tools.sh', 'build-packages.sh', 'check-package.py', 'check-metadata.py',
         'check-uninstaller.py', 'check-release-readiness.py', 'build-source-archive.sh',
         'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',
-        'publish-artifacts.py', 'build-packages.py', 'run-driver-contract-tests.sh',
+        'publish-artifacts.py', 'build-packages.py', 'driver_sources.py', 'run-driver-contract-tests.sh',
         'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py']
     files.update(ROOT / 'scripts' / name for name in scripts)
     for path in files:

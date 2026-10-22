@@ -13,8 +13,88 @@ static OSStatus get(AudioObjectID object, AudioObjectPropertySelector selector,
         gAudioServerPlugInDriverRef, object, 0, &address, 0, NULL, capacity, written, data);
 }
 
+static void plugin_properties(void) {
+    unsigned cases = 0;
+    for (unsigned acquired = 0; acquired < 2; acquired++) {
+        gBox_Acquired = acquired;
+        AudioObjectPropertyAddress address = {kAudioObjectPropertyOwnedObjects,
+            kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        UInt32 size = 0;
+        assert((*gAudioServerPlugInDriverRef)->GetPropertyDataSize(gAudioServerPlugInDriverRef,
+            kObjectID_PlugIn, 0, &address, 0, NULL, &size) == noErr);
+        assert(size == (acquired ? 2 : 1) * sizeof(AudioObjectID));
+        for (UInt32 capacity = 0; capacity <= 20; capacity++) {
+            AudioObjectID ids[8];
+            memset(ids, 0xa5, sizeof(ids));
+            UInt32 written = 0;
+            assert(get(kObjectID_PlugIn, address.mSelector, address.mScope,
+                capacity, &written, &ids[1]) == noErr);
+            UInt32 count = minimum(capacity / sizeof(AudioObjectID), acquired ? 2 : 1);
+            assert(written == count * sizeof(AudioObjectID));
+            if (count > 0) assert(ids[1] == kObjectID_Box);
+            if (count > 1) assert(ids[2] == kObjectID_Device);
+            for (unsigned i = 0; i < 8; i++) {
+                if (i < 1 || i >= 1 + count) assert(ids[i] == 0xa5a5a5a5);
+            }
+            cases++;
+        }
+    }
+    const AudioObjectPropertySelector selectors[] = {
+        kAudioPlugInPropertyTranslateUIDToBox, kAudioPlugInPropertyTranslateUIDToDevice};
+    CFStringRef values[] = {get_box_uid(), get_device_uid(), get_device2_uid(), CFSTR("unknown.uid")};
+    for (unsigned selector = 0; selector < 2; selector++) {
+        AudioObjectPropertyAddress address = {selectors[selector],
+            kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        for (unsigned uid = 0; uid < 4; uid++) {
+            for (UInt32 capacity = 0; capacity <= 12; capacity++) {
+                AudioObjectID ids[3] = {0xa5a5a5a5, 0xa5a5a5a5, 0xa5a5a5a5};
+                UInt32 written = 0;
+                OSStatus status = (*gAudioServerPlugInDriverRef)->GetPropertyData(
+                    gAudioServerPlugInDriverRef, kObjectID_PlugIn, 0, &address,
+                    sizeof(CFStringRef), &values[uid], capacity, &written, &ids[1]);
+                if (capacity < sizeof(AudioObjectID)) {
+                    assert(status == kAudioHardwareBadPropertySizeError);
+                    assert(ids[1] == 0xa5a5a5a5);
+                } else {
+                    assert(status == noErr && written == sizeof(AudioObjectID));
+                    AudioObjectID expected = kAudioObjectUnknown;
+                    if (selector == 0 && uid == 0) expected = kObjectID_Box;
+                    if (selector == 1 && uid == 1) expected = kObjectID_Device;
+                    if (selector == 1 && uid == 2) expected = kObjectID_Device2;
+                    assert(ids[1] == expected);
+                }
+                assert(ids[0] == 0xa5a5a5a5 && ids[2] == 0xa5a5a5a5);
+                cases++;
+            }
+        }
+        const UInt32 invalidSizes[] = {0, 1, sizeof(CFStringRef) - 1, sizeof(CFStringRef) + 1, 128};
+        for (unsigned i = 0; i < 5; i++) {
+            AudioObjectID id = 0xa5a5a5a5;
+            UInt32 written = 0;
+            assert((*gAudioServerPlugInDriverRef)->GetPropertyData(gAudioServerPlugInDriverRef,
+                kObjectID_PlugIn, 0, &address, invalidSizes[i], &values[0], sizeof(id),
+                &written, &id) == kAudioHardwareBadPropertySizeError);
+            assert(id == 0xa5a5a5a5);
+            cases++;
+        }
+        AudioObjectID id = 0xa5a5a5a5;
+        UInt32 written = 0;
+        assert((*gAudioServerPlugInDriverRef)->GetPropertyData(gAudioServerPlugInDriverRef,
+            kObjectID_PlugIn, 0, &address, sizeof(CFStringRef), NULL, sizeof(id),
+            &written, &id) == kAudioHardwareBadPropertySizeError);
+        assert(id == 0xa5a5a5a5);
+        cases++;
+    }
+    for (unsigned i = 0; i < 3; i++) CFRelease(values[i]);
+    printf("plugin-properties: PASS (%u cases)\n", cases);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
+    if (strcmp(argv[1], "plugin-properties") == 0) {
+        plugin_properties();
+        return 0;
+    }
     if (strcmp(argv[1], "control-matrix") == 0) {
         const AudioObjectID objects[] = {kObjectID_Device, kObjectID_Device2};
         const AudioObjectPropertyScope scopes[] = {kAudioObjectPropertyScopeGlobal,
