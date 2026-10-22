@@ -1,84 +1,50 @@
 # TapSay Audio
 
-TapSay 的独立虚拟声卡项目，设备显示名称为 `TapSay Audio 2ch`。
+TapSay 配套独立虚拟声卡，系统设备名为 **TapSay Audio 2ch**。
 
-当前实施规范为 [重建 PRD](docs/plan/2026-10-21-reference-driver-cleanup.md)，交接与决策见 [讨论记录](docs/discuss/2026-10-21-reference-driver-cleanup.md)。
+当前驱动沿用已完成一天多用户实测的参考实现。正在改进仓库、构建和安装卸载外围；驱动属性修复等待本轮人工测试后再开始。当前规范见 [外围改进计划](docs/plan/2026-10-22-peripheral-improvements.md)，分析见 [稳定版审阅](docs/discuss/2026-10-22-stable-version-review.md)。
 
-当前按用户确认的“先原样复现、部署验证，再优化”实施。驱动仅做 TapSay 产品身份适配，参考中的三项属性修复和后续控制列表候选均不加入本轮。已知问题保留在开发记录，旧文件整理和安装工具重写后置。当前尚无正式下载地址。
+## 支持范围
 
-## 项目命名
-
-| 项目 | 名称或文案 |
+| 项目 | 范围 |
 | --- | --- |
-| 项目名称 | `TapSay Audio` |
-| GitHub 仓库 | `tapsay-audio` |
-| 系统设备名称 | `TapSay Audio 2ch` |
-| PKG 文件名示例 | `TapSayAudio-2ch-0.1.0.pkg` |
-| 引导页中文说明 | 安装 TapSay 配套虚拟声卡 |
+| 系统与处理器 | macOS 14 起，Apple Silicon arm64；Intel 暂不支持 |
+| 设备名称 | TapSay Audio 2ch |
+| 音频格式 | 双声道 Float32 PCM，默认 48 kHz |
+| 可用采样率 | 8、16、24、44.1、48、88.2、96、176.4、192、352.8、384、705.6、768 kHz |
+| 设备类型 | 软件虚拟声卡，CoreAudio 上报 USB；无需 USB 硬件 |
 
-## 首版支持范围
+遥控器音频源仍是 16 kHz 单声道。格式列表表示驱动能力，不等于所有软件及采样率均已完成真机验收。已有用户报告当前版本日常使用稳定，其他环境需按软件和版本验证。
 
-arm64 驱动与本地 PKG/DMG 可构建；实际部署和音频链路结果单独记录，旧版验证结果不适用于本次重建。
-用户理解支持范围时，以本节及发布说明为准：
+## 安装与卸载
 
-| 项目 | 首版范围 |
-| --- | --- |
-| 系统 | macOS 14 及以上；重建候选尚未完成真机验收 |
-| 处理器 | Apple Silicon（arm64）；Intel（x86_64）暂不支持 |
-| 设备显示名称 | `TapSay Audio 2ch` |
-| 声道数 | 固定双声道 |
-| 采样率 | 8、16、24、44.1、48、88.2、96、176.4、192、352.8、384、705.6、768 kHz |
-| 默认采样率 | 48 kHz |
-| 声道格式 | 双声道、32-bit Float PCM |
-| 传输类型 | CoreAudio 上报 USB，仅用于应用兼容，不需要 USB 硬件 |
-| 分发文件 | arm64 DMG，内含 PKG、卸载 APP 和中文说明 |
+打开 DMG，双击其中的安装 PKG。卸载时双击“卸载 TapSay Audio.app”。支持升级、同版重装及降级覆盖；只操作本产品，不替换 MiRemoteV 或 BlackHole，不主动修改默认输入输出设备。
 
-上述采样率均为双声道 Float32；实际第三方软件兼容性仍需按软件和版本实测。
-
-首次安装后的声卡默认采样率设为 48 kHz。TapSay 遥控器源是 16 kHz 单声道，但驱动保持参考方案的通用输出能力，避免把应用源格式误当作声卡合同。
-44.1、48 kHz 作为对接其他常用软件的兼容格式保留；默认值不代表运行期间设备采样率不会变化。
-具体软件兼容性以发布时列出的实测软件、版本和结果为准，不保证仅凭采样率匹配即可兼容所有软件。
-
-已有社区报告指出，部分版本豆包输入法会隐藏特定类型的虚拟设备。当前驱动已按已批准 PRD
-将 CoreAudio transport type 上报为 USB；重建候选的实际加载属性及应用兼容仍需实测。
-本项目实际仍是软件虚拟声卡，无需额外 USB 硬件。
-验收不仅检查系统能否发现设备，也检查目标软件中能否选用并实际收到声音。
-
-TapSay 主程序当前产生的是 16 kHz 单声道浮点音频，这与虚拟声卡支持的双声道、
-多采样率能力不同。目标是用户选择声卡后即可使用，无需手动调整采样率。
-本次重建尚未验证主程序在新驱动下的格式转换、真实遥控器及第三方软件接收效果；
-仅看到设备名称或成功启动音频引擎不算完整验收。
+卸载提示会区分设备已消失、需要重启、无法确认及历史材料部分保留。工具不会自动重启 Mac。当前产物用于本地人工测试，尚未签名、公证或公开发行，没有正式下载地址。TapSay 主程序的 `TapSayAudioDownloadURL` 需在正式发布后配置。
 
 ## 构建与验证
 
-正式构建只使用固定参考方案，禁止旧 `legacy`、`reference-16k` 和 `reference-48k` profile。
+版本号及构建号只在 `config/product.json` 配置。构建仅使用 `third_party/blackhole/upstream`、固定 USB 补丁和身份补丁，不接受实验 profile。
 
 ```sh
 python3 scripts/check-metadata.py
-bash scripts/build-driver.sh
-bash scripts/build-native-tools.sh
+python3 Tests/ReleaseToolsTests.py
 bash scripts/build-packages.sh
 ```
 
-构建产物只面向 Apple Silicon arm64。安装前可使用隔离事务测试；安装到真实系统、重载音频服务和卸载需单独记录。当前没有正式下载地址。
+构包自动运行同一驱动产物的源码/格式合同检查、安装卸载隔离测试、PKG 和 DMG 内容检查。所有检查通过后整体替换 `dist/`；失败保留之前的产物。构建可能需要系统工具运行权限，不会安装声卡或重载音频服务。
 
-主程序音频源仍是 16 kHz 单声道浮点；驱动默认 48 kHz，并保留完整参考采样率列表。验证必须区分设备可见、PCM 环回、遥控器音频到达、播放探测和第三方文字上屏。
+单独构建驱动后，可指定其构建记录验证：
 
-旧阶段记录保留在 Git 历史和 `docs/implementation/`，不再作为正式构建入口。
+```sh
+bash scripts/build-driver.sh
+bash scripts/run-driver-contract-tests.sh --build-result .build/latest-driver.json
+```
 
-## 发布计划
+产物为 `TapSayAudio-2ch-版本.pkg`、`TapSayAudio-2ch-版本-arm64.dmg`、对应源码包、校验值及 `BUILD-RESULT.json`。旧驱动、实验入口及过期文档已从当前工作树移除，历史可通过 Git 查询。本机故障证据及恢复材料仍保留。
 
-正式版本计划通过本仓库的 GitHub Releases 发行，提供 arm64 DMG、对应完整源码包、校验文件及版本说明。
+## 稳定基线与许可
 
-首版计划版本为 `0.1.0`。DMG 文件名为 `TapSayAudio-2ch-0.1.0-arm64.dmg`，包含 `TapSayAudio-2ch-0.1.0.pkg`、卸载工具及说明。
-运行 `bash scripts/build-packages.sh` 可生成 PKG、DMG、完整源码归档及 `SHA256SUMS.txt`。
+上一版交付及用户手动部署记录见 [参考部署记录](docs/implementation/2026-10-21-reference-only-deployment.md)。当前默认 48 kHz、采样率表、缓冲和 IO 算法保持该基线。
 
-TapSay 主程序计划通过 `TapSayAudioDownloadURL` 打开正式发行页。真实下载入口须在安装包正式发布并验证可下载后补充；当前没有可用的正式发行下载地址。
-
-## 许可证
-
-本项目采用 GNU GPL 第 3 版，完整条款见 [LICENSE](LICENSE)。
-
-本项目基于 BlackHole 固定提交开发独立品牌的派生驱动。上游来源、许可记录和
-引入第三方代码时的处理要求见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-发行包包含 GPLv3 源码归档，最终载荷及品牌材料审查仍作为发布门槛。
+本项目采用 [GNU GPL 第 3 版](LICENSE)。固定上游版权及来源见 [第三方说明](THIRD_PARTY_NOTICES.md) 和 [上游来源](third_party/blackhole/UPSTREAM.md)。安装包同步提供对应源码及必要构建、安装脚本。

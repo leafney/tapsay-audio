@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify the shipped native installer in an isolated temporary root."""
 
+import argparse
 import json
 import os
 import plistlib
@@ -14,7 +15,11 @@ META_PATH = ROOT / "config/product.json"
 META = json.loads(META_PATH.read_text(encoding="utf-8"))
 ARCH = subprocess.check_output(["/usr/bin/uname", "-m"], text=True).strip()
 TOOL = ROOT / f".build/native/{ARCH}/TapSayAudioTransaction"
-DRIVER = Path(json.loads((ROOT / ".build/latest-driver.json").read_text())["bundle"])
+parser = argparse.ArgumentParser()
+parser.add_argument('--build-result', type=Path, required=True)
+options = parser.parse_args()
+BUILD_RESULT = json.loads(options.build_result.read_text())
+DRIVER = Path(BUILD_RESULT['bundle'])
 
 
 def run(tool, root, metadata, *args, success=True):

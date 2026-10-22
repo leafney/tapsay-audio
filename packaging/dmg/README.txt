@@ -4,7 +4,7 @@ TapSay Audio 2ch
 - GPLv3 完整条款见 GPL-3.0.txt。
 - BlackHole 上游来源和第三方许可说明见“第三方许可说明.md”。
 
-安装：双击 TapSayAudio-2ch-0.1.0.pkg。
+安装：双击 TapSayAudio-2ch-@VERSION@.pkg。
 卸载：双击“卸载 TapSay Audio.app”。
 卸载完成：工具确认驱动文件、安装状态、收据及系统设备均已移除，并已清理可安全确认归属的旧版安装材料。
 卸载待重启生效：文件已清理，但系统仍保留设备；请保存工作并手动重新启动 Mac。

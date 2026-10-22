@@ -19,13 +19,14 @@ def main():
         '.gitignore', '.gitattributes', 'config/product.json',
         'Uninstaller.app/Contents/Info.plist',
         'Uninstaller.app/Contents/MacOS/TapSayAudioUninstaller',
-        'Uninstaller.app/Contents/Resources/product.json',
         'third_party/blackhole/LICENSE', 'third_party/blackhole/UPSTREAM.md',
         'third_party/blackhole/UPSTREAM-VERSION', 'third_party/blackhole/SOURCE-SHA256.json',
         'third_party/blackhole/blackhole-device-usb.patch', 'third_party/blackhole/tapsay-identity.patch',
         'docs/plan/2026-10-21-reference-driver-cleanup.md',
-        'docs/discuss/2026-10-21-reference-driver-cleanup.md')}
-    for folder, suffixes in [('Tools', {'.swift'}), ('Tests', {'.swift', '.c'}),
+        'docs/discuss/2026-10-21-reference-driver-cleanup.md',
+        'docs/plan/2026-10-22-peripheral-improvements.md',
+        'docs/discuss/2026-10-22-stable-version-review.md')}
+    for folder, suffixes in [('Tools', {'.swift'}), ('Tests', {'.swift', '.c', '.py'}),
                              ('packaging', None), ('third_party/blackhole/upstream', None)]:
         files.update(p for p in (ROOT / folder).rglob('*')
                      if p.is_file() and (suffixes is None or p.suffix in suffixes)
@@ -33,7 +34,9 @@ def main():
     scripts = ['build-driver.sh', 'prepare-driver-source.py', 'check-reference-source.py',
         'build-native-tools.sh', 'build-packages.sh', 'check-package.py', 'check-metadata.py',
         'check-uninstaller.py', 'check-release-readiness.py', 'build-source-archive.sh',
-        'build-source-archive.py', 'test-native-transaction.py']
+        'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',
+        'publish-artifacts.py', 'build-packages.py', 'run-driver-contract-tests.sh',
+        'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py']
     files.update(ROOT / 'scripts' / name for name in scripts)
     for path in files:
         if not path.is_file() or path.is_symlink():
