@@ -177,6 +177,19 @@ class ReleaseToolsTests(unittest.TestCase):
             self.assertEqual(config.read_bytes(), original)
             self.assertFalse(output.exists())
 
+    def test_architecture_build_interfaces_reject_invalid_values(self):
+        commands = [
+            [str(ROOT / 'scripts/build-driver.sh')],
+            [str(ROOT / 'scripts/build-driver.sh'), '--arch', 'universal2'],
+            [str(ROOT / 'scripts/build-native-tools.sh')],
+            [str(ROOT / 'scripts/build-native-tools.sh'), '--arch', 'arm64e'],
+            [sys.executable, str(ROOT / 'scripts/check-driver-artifact.py'),
+             '/missing/driver', 'universal2'],
+        ]
+        for command in commands:
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, command)
+
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)

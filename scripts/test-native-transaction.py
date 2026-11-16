@@ -13,12 +13,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "config/product.json"
 META = json.loads(META_PATH.read_text(encoding="utf-8"))
-ARCH = subprocess.check_output(["/usr/bin/uname", "-m"], text=True).strip()
-TOOL = ROOT / f".build/native/{ARCH}/TapSayAudioTransaction"
 parser = argparse.ArgumentParser()
 parser.add_argument('--build-result', type=Path, required=True)
 options = parser.parse_args()
 BUILD_RESULT = json.loads(options.build_result.read_text())
+ARCH = BUILD_RESULT.get('architecture')
+if ARCH not in ('arm64', 'x86_64'):
+    raise ValueError('构建记录中的架构无效')
+TOOL = ROOT / f".build/native/{ARCH}/TapSayAudioTransaction"
 DRIVER = Path(BUILD_RESULT['bundle'])
 
 
@@ -53,7 +55,8 @@ def main():
     assert TOOL.is_file() and DRIVER.is_dir(), "先构建驱动和原生工具"
     protocol_test = ROOT / f".build/native/{ARCH}/UninstallResultTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+         "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/UninstallResult.swift"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/HistoricalCleanup.swift"),
@@ -64,7 +67,8 @@ def main():
     subprocess.run([str(protocol_test)], check=True)
     transaction_test = ROOT / f".build/native/{ARCH}/TransactionRecordTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+         "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/TransactionRecord.swift"),
          str(ROOT / "Tests/TransactionRecordTests.swift"),
@@ -73,7 +77,8 @@ def main():
     subprocess.run([str(transaction_test)], check=True)
     history_test = ROOT / f".build/native/{ARCH}/HistoricalCleanupTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-module-cache-path", str(ROOT / ".build/native/module-cache"),
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+         "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/HistoricalCleanup.swift"),
          str(ROOT / "Tests/HistoricalCleanupTests.swift"),

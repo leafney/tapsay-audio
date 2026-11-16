@@ -14,6 +14,7 @@ from product import ROOT, load_product, render_uninstaller
 
 def build(output):
     metadata = load_product()
+    architecture = 'arm64'
     output = Path(output).absolute()
     if output == ROOT or output in ROOT.parents or output.is_symlink():
         raise ValueError('产物目录不能覆盖源码或使用符号链接')
@@ -28,9 +29,10 @@ def build(output):
             env = dict(os.environ, LC_ALL='C', LANG='C')
             def run(args, extra=None):
                 subprocess.run(args, check=True, cwd=ROOT, env=dict(env, **(extra or {})))
-            run(['bash', 'scripts/build-native-tools.sh'])
+            run(['bash', 'scripts/build-native-tools.sh', '--arch', architecture])
             result_path = work / 'driver-result.json'
-            run(['bash', 'scripts/build-driver.sh'], {'TAPSAY_BUILD_RESULT': str(result_path)})
+            run(['bash', 'scripts/build-driver.sh', '--arch', architecture],
+                {'TAPSAY_BUILD_RESULT': str(result_path)})
             result = json.loads(result_path.read_text())
             bundle = Path(result['bundle'])
             binary = bundle / 'Contents/MacOS/TapSayAudio'
