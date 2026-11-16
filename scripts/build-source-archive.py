@@ -35,7 +35,8 @@ def main():
         files.update(p for p in (ROOT / folder).rglob('*')
                      if p.is_file() and (suffixes is None or p.suffix in suffixes)
                      and p.name != '.DS_Store')
-    scripts = ['build-driver.sh', 'prepare-driver-source.py', 'check-reference-source.py',
+    scripts = ['build-driver.sh', 'prepare-build-metadata.py',
+        'prepare-driver-source.py', 'check-reference-source.py',
         'build-native-tools.sh', 'build-packages.sh', 'check-package.py', 'check-metadata.py',
         'check-uninstaller.py', 'check-release-readiness.py', 'build-source-archive.sh',
         'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',

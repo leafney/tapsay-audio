@@ -56,6 +56,7 @@ def audit(directory, metadata, run=command):
                     'third_party/blackhole/SOURCE-SHA256.json',
                     'scripts/driver_sources.py', 'Tests/DriverContract.c', 'Tests/DriverSourceTests.py',
                     'scripts/prepare-driver-source.py', 'scripts/check-reference-source.py',
+                    'scripts/prepare-build-metadata.py',
                     'scripts/test-hal-contract.sh',
                     'Tools/Transaction/main.swift', 'Tools/Transaction/Uninstaller.swift',
                     'scripts/build-driver.sh', 'scripts/build-native-tools.sh', 'scripts/product.py',

@@ -31,7 +31,9 @@ def load_product(path=None):
     for key, value in expected.items():
         if d.get(key) != value:
             raise ValueError('稳定驱动合同不匹配：' + key)
-    if p['name'] != 'TapSay Audio' or p['architectures'] != ['arm64'] or p['minimum_macos'] != '14.0':
+    if (p['name'] != 'TapSay Audio'
+            or p['architectures'] != ['arm64', 'x86_64']
+            or p['minimum_macos'] != '14.0'):
         raise ValueError('产品名称或平台合同不匹配')
     if u['bundle_identifier'] != 'com.leafney.tapsay.audio.uninstaller':
         raise ValueError('卸载入口标识不匹配')

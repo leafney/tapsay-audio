@@ -6,7 +6,7 @@
     "version": "0.1.1",
     "build_number": "2",
     "minimum_macos": "14.0",
-    "architectures": ["arm64"]
+    "architectures": ["arm64", "x86_64"]
   },
   "driver": {
     "target_name": "TapSayAudio",

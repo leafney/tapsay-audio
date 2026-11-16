@@ -23,6 +23,11 @@ spec = importlib.util.spec_from_file_location('publisher', ROOT / 'scripts/publi
 publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
 
+metadata_spec = importlib.util.spec_from_file_location(
+    'prepare_build_metadata', ROOT / 'scripts/prepare-build-metadata.py')
+prepare_build_metadata = importlib.util.module_from_spec(metadata_spec)
+metadata_spec.loader.exec_module(prepare_build_metadata)
+
 
 class ReleaseToolsTests(unittest.TestCase):
     def test_version_and_rendering(self):
@@ -45,6 +50,132 @@ class ReleaseToolsTests(unittest.TestCase):
                 metadata['product']['version'] = bad
                 config.write_text(json.dumps(metadata))
                 with self.assertRaises(ValueError): load_product(config)
+
+    def test_architecture_configuration_contract(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            metadata = copy.deepcopy(load_product())
+            config = base / 'product.json'
+            for invalid in ([], ['arm64'], ['x86_64', 'arm64'],
+                            ['arm64', 'arm64'], ['arm64', 'universal2']):
+                candidate = copy.deepcopy(metadata)
+                candidate['product']['architectures'] = invalid
+                config.write_text(json.dumps(candidate))
+                with self.assertRaises(ValueError):
+                    load_product(config)
+
+    def test_manual_build_metadata_preserves_configuration_version(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            config = base / 'product.json'
+            output = base / 'build-metadata.json'
+            github_output = base / 'github-output.txt'
+            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            environment = dict(os.environ, GITHUB_OUTPUT=str(github_output))
+            subprocess.run([
+                sys.executable,
+                str(ROOT / 'scripts/prepare-build-metadata.py'),
+                '--mode', 'manual',
+                '--build-number', '73',
+                '--config', str(config),
+                '--output-json', str(output),
+            ], check=True, env=environment)
+            effective = load_product(config)
+            metadata = json.loads(output.read_text())
+            self.assertEqual(effective['product']['version'], '0.1.1')
+            self.assertEqual(effective['product']['build_number'], '73')
+            self.assertEqual(metadata['version'], '0.1.1')
+            self.assertEqual(metadata['build_number'], '73')
+            self.assertEqual(metadata['tag'], '')
+            self.assertRegex(metadata['source_sha'], r'^[0-9a-f]{40}$')
+            self.assertEqual(github_output.read_text().splitlines(), [
+                'version=0.1.1', 'build_number=73', 'tag='])
+
+    def test_tag_build_metadata_uses_strict_tag_version(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            config = base / 'product.json'
+            output = base / 'build-metadata.json'
+            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            subprocess.run([
+                sys.executable,
+                str(ROOT / 'scripts/prepare-build-metadata.py'),
+                '--mode', 'tag',
+                '--tag', 'v2.30.4',
+                '--build-number', '91',
+                '--config', str(config),
+                '--output-json', str(output),
+            ], check=True)
+            effective = load_product(config)
+            metadata = json.loads(output.read_text())
+            self.assertEqual(effective['product']['version'], '2.30.4')
+            self.assertEqual(effective['product']['build_number'], '91')
+            self.assertEqual(metadata['version'], '2.30.4')
+            self.assertEqual(metadata['build_number'], '91')
+            self.assertEqual(metadata['tag'], 'v2.30.4')
+            self.assertRegex(metadata['source_sha'], r'^[0-9a-f]{40}$')
+
+    def test_invalid_build_input_leaves_configuration_unchanged(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            config = base / 'product.json'
+            output = base / 'build-metadata.json'
+            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            original = config.read_bytes()
+            invalid_tags = [
+                '2.30.4', 'v02.30.4', 'v2.3', 'v2.3.4-beta.1',
+                'v2.3.4.1', 'vv2.3.4', 'v2.03.4', '']
+            for tag in invalid_tags:
+                result = subprocess.run([
+                    sys.executable,
+                    str(ROOT / 'scripts/prepare-build-metadata.py'),
+                    '--mode', 'tag',
+                    '--tag', tag,
+                    '--build-number', '91',
+                    '--config', str(config),
+                    '--output-json', str(output),
+                ], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0, tag)
+                self.assertEqual(config.read_bytes(), original)
+                self.assertFalse(output.exists())
+            for build_number in ['0', '-1', '01', 'abc', '']:
+                result = subprocess.run([
+                    sys.executable,
+                    str(ROOT / 'scripts/prepare-build-metadata.py'),
+                    '--mode', 'manual',
+                    '--build-number', build_number,
+                    '--config', str(config),
+                    '--output-json', str(output),
+                ], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0, build_number)
+                self.assertEqual(config.read_bytes(), original)
+                self.assertFalse(output.exists())
+
+    def test_metadata_prepare_failure_does_not_replace_configuration(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            config = base / 'product.json'
+            output = base / 'build-metadata.json'
+            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            original = config.read_bytes()
+            real_write_temporary = prepare_build_metadata.write_temporary
+            calls = 0
+
+            def fail_second_write(path, content):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError('injected output failure')
+                return real_write_temporary(path, content)
+
+            with mock.patch.object(
+                    prepare_build_metadata, 'write_temporary',
+                    side_effect=fail_second_write):
+                with self.assertRaises(OSError):
+                    prepare_build_metadata.prepare(
+                        'tag', 'v1.2.3', '42', config, output)
+            self.assertEqual(config.read_bytes(), original)
+            self.assertFalse(output.exists())
 
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:
