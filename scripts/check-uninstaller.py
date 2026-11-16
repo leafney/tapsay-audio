@@ -38,6 +38,8 @@ def main():
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
     if info['CFBundleIdentifier'] != metadata['uninstaller']['bundle_identifier']:
         raise ValueError('卸载标识不一致')
+    if info['CFBundleExecutable'] != 'TapSayAudioUninstaller-' + architecture:
+        raise ValueError('卸载主可执行文件与目标架构不一致')
     if info['CFBundleShortVersionString'] != metadata['product']['version']:
         raise ValueError('卸载版本不一致')
     if info['CFBundleVersion'] != metadata['product']['build_number']:
@@ -52,6 +54,8 @@ def main():
         app / 'Contents/MacOS' / ('TapSayAudioUninstaller-' + architecture),
         app / 'Contents/MacOS' / ('TapSayAudioTransaction-' + architecture),
     ]
+    if not (app / 'Contents/MacOS' / info['CFBundleExecutable']).is_file():
+        raise ValueError('卸载 APP 主可执行文件缺失')
     for binary in required:
         if not binary.is_file():
             raise ValueError('卸载 APP 缺少架构工具：' + binary.name)

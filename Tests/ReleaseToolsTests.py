@@ -55,9 +55,11 @@ class ReleaseToolsTests(unittest.TestCase):
             render_uninstaller(app, metadata, native, 'arm64')
             info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
             self.assertEqual((info['CFBundleShortVersionString'], info['CFBundleVersion']), ('0.1.1', '2'))
+            self.assertEqual(info['CFBundleExecutable'], 'TapSayAudioUninstaller-arm64')
             self.assertEqual(json.loads((app / 'Contents/Resources/product.json').read_text()), metadata)
             self.assertTrue((app / 'Contents/MacOS/TapSayAudioUninstaller-arm64').is_file())
             self.assertTrue((app / 'Contents/MacOS/TapSayAudioTransaction-arm64').is_file())
+            self.assertFalse((app / 'Contents/MacOS/TapSayAudioUninstaller').exists())
             self.assertFalse((app / 'Contents/MacOS/TapSayAudioTransaction-x86_64').exists())
             for bad in ['../release', '0.1.1\n', '01.1.0', '0.1', '']:
                 metadata['product']['version'] = bad
@@ -83,7 +85,9 @@ class ReleaseToolsTests(unittest.TestCase):
             config = base / 'product.json'
             output = base / 'build-metadata.json'
             github_output = base / 'github-output.txt'
-            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            source_metadata = copy.deepcopy(load_product())
+            source_metadata['product']['version'] = '9.9.9'
+            config.write_text(json.dumps(source_metadata))
             environment = dict(os.environ, GITHUB_OUTPUT=str(github_output))
             subprocess.run([
                 sys.executable,
@@ -94,15 +98,15 @@ class ReleaseToolsTests(unittest.TestCase):
                 '--output-json', str(output),
             ], check=True, env=environment)
             effective = load_product(config)
-            metadata = json.loads(output.read_text())
-            self.assertEqual(effective['product']['version'], '0.1.1')
+            build_metadata = json.loads(output.read_text())
+            self.assertEqual(effective['product']['version'], '9.9.9')
             self.assertEqual(effective['product']['build_number'], '73')
-            self.assertEqual(metadata['version'], '0.1.1')
-            self.assertEqual(metadata['build_number'], '73')
-            self.assertEqual(metadata['tag'], '')
-            self.assertRegex(metadata['source_sha'], r'^[0-9a-f]{40}$')
+            self.assertEqual(build_metadata['version'], '9.9.9')
+            self.assertEqual(build_metadata['build_number'], '73')
+            self.assertEqual(build_metadata['tag'], '')
+            self.assertRegex(build_metadata['source_sha'], r'^[0-9a-f]{40}$')
             self.assertEqual(github_output.read_text().splitlines(), [
-                'version=0.1.1', 'build_number=73', 'tag='])
+                'version=9.9.9', 'build_number=73', 'tag='])
 
     def test_tag_build_metadata_uses_strict_tag_version(self):
         with tempfile.TemporaryDirectory() as t:
@@ -294,6 +298,7 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertIn('actions/upload-artifact@v4', shared)
         self.assertIn('if-no-files-found: error', shared)
         self.assertIn('retention-days: 14', shared)
+        self.assertIn('overwrite: true', shared)
 
     def test_tag_release_workflow_requires_developer_id(self):
         release = (ROOT / '.github/workflows/release.yml').read_text()
@@ -326,6 +331,48 @@ class ReleaseToolsTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_packages.build(
                         'arm64', Path(t) / 'output', 'developer-id')
+
+    def test_developer_id_identity_lookup_uses_full_name_and_team(self):
+        environment = {
+            'APPLE_TEAM_ID': 'ABCDE12345',
+            'DEVELOPER_ID_APPLICATION_IDENTITY':
+                'Developer ID Application: Example Corp (ABCDE12345)',
+            'DEVELOPER_ID_INSTALLER_IDENTITY':
+                'Developer ID Installer: Example Corp (ABCDE12345)',
+        }
+        output = (
+            '  1) ABCDEF "Developer ID Application: Example Corp (ABCDE12345)"\n'
+            '  1) 123456 "Developer ID Installer: Example Corp (ABCDE12345)"\n'
+        )
+        result = subprocess.CompletedProcess([], 0, output, '')
+        with mock.patch.object(build_packages.subprocess, 'run', return_value=result):
+            build_packages.verify_developer_identities(environment)
+
+        environment['APPLE_TEAM_ID'] = 'ZZZZZ99999'
+        with self.assertRaisesRegex(ValueError, 'APPLE_TEAM_ID'):
+            build_packages.verify_developer_identities(environment)
+
+    def test_notarization_requires_accepted_status(self):
+        environment = {
+            'APP_STORE_CONNECT_PRIVATE_KEY_PATH': '/tmp/AuthKey.p8',
+            'APP_STORE_CONNECT_KEY_ID': 'ABCDE12345',
+            'APP_STORE_CONNECT_ISSUER_ID': '00000000-0000-0000-0000-000000000000',
+        }
+        accepted = subprocess.CompletedProcess(
+            [], 0, json.dumps({'id': 'submission-id', 'status': 'Accepted'}), '')
+        with mock.patch.object(build_packages.subprocess, 'run', return_value=accepted):
+            self.assertEqual(
+                build_packages.notarize(Path('/tmp/image.dmg'), environment),
+                'submission-id',
+            )
+
+        invalid = subprocess.CompletedProcess(
+            [], 0, json.dumps({'id': 'submission-id', 'status': 'Invalid'}), '')
+        log = subprocess.CompletedProcess([], 0, '{"issues": []}', '')
+        with mock.patch.object(
+                build_packages.subprocess, 'run', side_effect=[invalid, log]):
+            with self.assertRaisesRegex(ValueError, 'Apple 公证未通过：Invalid'):
+                build_packages.notarize(Path('/tmp/image.dmg'), environment)
 
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:

@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -39,19 +40,69 @@ def developer_id_environment():
 
 
 def verify_developer_identities(environment):
+    team_id = environment['APPLE_TEAM_ID']
+    if re.fullmatch(r'[A-Z0-9]{10}', team_id) is None:
+        raise ValueError('APPLE_TEAM_ID 格式无效')
     for kind, variable in (
         ('Developer ID Application', 'DEVELOPER_ID_APPLICATION_IDENTITY'),
         ('Developer ID Installer', 'DEVELOPER_ID_INSTALLER_IDENTITY'),
     ):
         identity = environment[variable]
+        if (not identity.startswith(kind + ': ')
+                or not identity.endswith(' (' + team_id + ')')):
+            raise ValueError(kind + ' 身份与 APPLE_TEAM_ID 不匹配')
         result = subprocess.run(
             ['/usr/bin/security', 'find-identity', '-v', '-p', 'codesigning'],
             text=True,
             capture_output=True,
         )
         result.check_returncode()
-        if f'{kind}: {identity}' not in result.stdout:
+        if f'"{identity}"' not in result.stdout:
             raise ValueError(kind + ' 身份不可用')
+
+
+def notarize(image, environment):
+    authentication = [
+        '--key', environment['APP_STORE_CONNECT_PRIVATE_KEY_PATH'],
+        '--key-id', environment['APP_STORE_CONNECT_KEY_ID'],
+        '--issuer', environment['APP_STORE_CONNECT_ISSUER_ID'],
+    ]
+    result = subprocess.run(
+        [
+            '/usr/bin/xcrun', 'notarytool', 'submit', str(image),
+            *authentication, '--wait', '--timeout', '30m',
+            '--output-format', 'json',
+        ],
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+    )
+    if result.returncode != 0:
+        raise ValueError('公证提交失败：' + (result.stderr or result.stdout).strip())
+    try:
+        submission = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError('公证服务返回了无法解析的结果') from error
+    status = submission.get('status')
+    submission_id = submission.get('id')
+    if status != 'Accepted':
+        details = ''
+        if submission_id:
+            log_result = subprocess.run(
+                [
+                    '/usr/bin/xcrun', 'notarytool', 'log', submission_id,
+                    *authentication, '--output-format', 'json',
+                ],
+                text=True,
+                capture_output=True,
+                cwd=ROOT,
+            )
+            details = (log_result.stdout or log_result.stderr).strip()
+        message = 'Apple 公证未通过：' + str(status)
+        if details:
+            message += '\n' + details
+        raise ValueError(message)
+    return submission_id
 
 
 def build(architecture, output, signing_mode='adhoc'):
@@ -213,13 +264,7 @@ def build(architecture, output, signing_mode='adhoc'):
                     signing_environment['DEVELOPER_ID_APPLICATION_IDENTITY'],
                     '--timestamp', str(image),
                 ])
-                run([
-                    '/usr/bin/xcrun', 'notarytool', 'submit', str(image),
-                    '--key', signing_environment['APP_STORE_CONNECT_PRIVATE_KEY_PATH'],
-                    '--key-id', signing_environment['APP_STORE_CONNECT_KEY_ID'],
-                    '--issuer', signing_environment['APP_STORE_CONNECT_ISSUER_ID'],
-                    '--wait',
-                ])
+                notarize(image, signing_environment)
                 run(['/usr/bin/xcrun', 'stapler', 'staple', str(image)])
                 run(['/usr/bin/xcrun', 'stapler', 'validate', str(image)])
                 run([

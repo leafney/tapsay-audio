@@ -51,6 +51,7 @@ def render_uninstaller(destination, metadata, native, architecture):
     destination, native = Path(destination), Path(native)
     shutil.copytree(ROOT / 'Uninstaller.app', destination)
     executable_directory = destination / 'Contents/MacOS'
+    (executable_directory / 'TapSayAudioUninstaller').unlink(missing_ok=True)
     for pattern in ('TapSayAudioUninstaller-*', 'TapSayAudioTransaction-*'):
         for stale in executable_directory.glob(pattern):
             stale.unlink()
@@ -59,6 +60,7 @@ def render_uninstaller(destination, metadata, native, architecture):
     info.update(CFBundleShortVersionString=metadata['product']['version'],
                 CFBundleVersion=metadata['product']['build_number'],
                 CFBundleIdentifier=metadata['uninstaller']['bundle_identifier'],
+                CFBundleExecutable='TapSayAudioUninstaller-' + architecture,
                 LSMinimumSystemVersion=metadata['product']['minimum_macos'])
     info_path.write_bytes(plistlib.dumps(info))
     resources = destination / 'Contents/Resources'
