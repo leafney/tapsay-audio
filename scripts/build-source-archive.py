@@ -50,7 +50,8 @@ def main():
         'check-uninstaller.py', 'check-release-readiness.py', 'build-source-archive.sh',
         'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',
         'publish-artifacts.py', 'build-packages.py', 'driver_sources.py', 'run-driver-contract-tests.sh',
-        'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py']
+        'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py',
+        'publish-github-release.py']
     files.update(ROOT / 'scripts' / name for name in scripts)
     files.update((ROOT / '.github/workflows').glob('*.yml'))
     for path in files:

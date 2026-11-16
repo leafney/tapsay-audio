@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-from product import load_product
+from product import DISTRIBUTION_APPROVED_STATUS, load_product
 
 ROOT = Path(__file__).resolve().parents[1]
 TAG_PATTERN = r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
@@ -61,6 +61,8 @@ def prepare(mode, tag, build_number, config_path, output_path):
     else:
         if tag is None or re.fullmatch(TAG_PATTERN, tag) is None:
             raise ValueError('发布标签必须严格匹配 vX.Y.Z')
+        if metadata['upstream']['source_import_status'] != DISTRIBUTION_APPROVED_STATUS:
+            raise ValueError('第三方分发审查尚未完成')
         effective_tag = tag
         version = tag.removeprefix('v')
 

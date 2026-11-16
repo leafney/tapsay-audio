@@ -68,10 +68,11 @@ TapSayAudio-2ch-<版本>-x86_64-build-<构建号>
 1. 从对应 Actions 运行页面下载架构 ZIP。
 2. 解压后先验证散列。
 3. 在匹配架构的 Mac 上打开 DMG。
-4. 双击 DMG 中的 PKG 完成安装。
-5. 打开小声点，选择 `TapSay Audio 2ch` 进行语音链路测试。
-6. 测试结束后运行 DMG 中的卸载工具。
-7. 返回 GitHub Releases 页面，确认本次手动运行没有新增 Release。
+4. 如果 ad hoc 包被 Gatekeeper 拦截，打开“系统设置 → 隐私与安全性”，确认来源后选择“仍要打开”。不要关闭 Gatekeeper。
+5. 双击 DMG 中的 PKG 完成安装。
+6. 打开小声点，选择 `TapSay Audio 2ch` 进行语音链路测试。
+7. 测试结束后运行 DMG 中的卸载工具。
+8. 返回 GitHub Releases 页面，确认本次手动运行没有新增 Release。
 
 散列验证：
 
@@ -105,6 +106,14 @@ APP_STORE_CONNECT_PRIVATE_KEY_P8_BASE64
 
 工作流会创建临时 Keychain，分别导入 Developer ID Application 和 Developer ID Installer 身份。证书身份由 Runner 实际枚举，不把完整证书名称写成仓库常量的必要条件。
 
+正式 Tag 还要求 `config/product.json` 中的上游分发审查状态为：
+
+```text
+approved for distribution
+```
+
+该字段仍为 pending 时，Tag 构建会在写入版本元数据前失败。内部 ad hoc Artifact 不受此限制。
+
 ## 正式 Tag 发布
 
 证书和 Secrets 配置完成后：
@@ -113,8 +122,11 @@ APP_STORE_CONNECT_PRIVATE_KEY_P8_BASE64
 2. 创建并推送严格格式的 Tag，例如 `v0.2.0`。
 3. `release.yml` 从 Tag 生成版本，两个 Runner 使用同一个 `run_number`。
 4. 两个架构分别完成 Developer ID 签名、PKG `productsign`、DMG 公证、staple 和系统策略验证。
-5. 任一架构失败时，发布任务不会运行。
-6. 两个架构都成功后才创建 Pre-release。
+5. 汇总任务下载两个架构产物，并对最终 DMG 再次执行签名、公证、staple、DMG 完整性和散列检查。
+6. 任一架构或最终复验失败时，发布任务不会创建公开 Release。
+7. 所有检查通过后先创建隐藏 Draft，上传资产并核对远端文件名称和大小。
+8. Draft 资产完整后才切换为 Pre-release。
+9. 上传或最终核验失败时删除本次 Draft，但保留 Git Tag。
 
 公开 Release 只包含：
 
@@ -159,6 +171,6 @@ fc268a262a83a3f2d3c3eec4c988c43c067580de219081f9899b7f2c77c4a320  TapSayAudio-2c
 ```
 
 - x86_64 原生构建：等待 GitHub `macos-15-intel` Runner 执行。
-- GitHub 手动双架构 Artifact：本轮未能执行。本地分支比 `origin/feat/61116` 领先 8 个提交，远端分支尚无 `.github/workflows/` 文件；本机 `gh` 也未登录。没有推送分支、合并默认分支或改用个人令牌绕过该限制。
+- GitHub 手动双架构 Artifact：本轮未能执行。本地分支尚未推送，远端分支尚无 `.github/workflows/` 文件；本机 `gh` 也未登录。没有推送分支、合并默认分支或改用个人令牌绕过该限制。
 - 解锁条件：将本次工作流提交推送并合入允许显示 `workflow_dispatch` 的分支后，在 GitHub Actions 页面手动运行 `Build Internal Artifacts`，确认两个架构成功且没有新增 Release。
 - 正式 Tag 发布：证书配置完成前不执行。

@@ -113,32 +113,17 @@ jobs:
             --output "$RUNNER_TEMP/public-release" \
             --version "$RELEASE_VERSION" \
             --minimum-macos 14.0 \
-            --build-metadata .build/build-metadata.json
+            --build-metadata .build/build-metadata.json \
+            --formal
 
-      - name: Ensure release does not already exist
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release already exists: $RELEASE_TAG" >&2
-            exit 1
-          fi
-
-      - name: Create GitHub Pre-release
+      - name: Publish GitHub Pre-release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" \
-            --verify-tag \
-            --prerelease \
-            --title "TapSay Audio $RELEASE_VERSION" \
-            --generate-notes \
-            "$RUNNER_TEMP/public-release/TapSayAudio-2ch-${RELEASE_VERSION}-arm64.dmg" \
-            "$RUNNER_TEMP/public-release/TapSayAudio-2ch-${RELEASE_VERSION}-x86_64.dmg" \
-            "$RUNNER_TEMP/public-release/TapSayAudio-2ch-${RELEASE_VERSION}-source.tar.gz" \
-            "$RUNNER_TEMP/public-release/SHA256SUMS.txt"
+          python3 scripts/publish-github-release.py \
+            --tag "$RELEASE_TAG" \
+            --version "$RELEASE_VERSION" \
+            --directory "$RUNNER_TEMP/public-release"

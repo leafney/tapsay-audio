@@ -11,7 +11,8 @@ import shutil
 import subprocess
 import tempfile
 
-from product import ROOT, load_product
+from product import DISTRIBUTION_APPROVED_STATUS, ROOT, load_product
+from release_checks import audit, exit_code
 
 VERSION_PATTERN = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 
@@ -73,8 +74,20 @@ def write_checksums(directory, names):
     (directory / 'SHA256SUMS.txt').write_text(''.join(rows))
 
 
+def verify_formal_release(directory, metadata):
+    require(
+        metadata['upstream']['source_import_status'] == DISTRIBUTION_APPROVED_STATUS,
+        '第三方分发审查尚未完成',
+    )
+    result = audit(directory, metadata, formal=True)
+    code = exit_code(result, formal=True)
+    if code != 0:
+        errors = result['content_errors'] or result['publication_pending']
+        raise ValueError('正式发布验证失败：' + '；'.join(errors))
+
+
 def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
-             build_metadata=None):
+             build_metadata=None, formal=False):
     require(re.fullmatch(VERSION_PATTERN, version) is not None, '版本格式无效')
     metadata = load_product()
     require(metadata['product']['version'] == version, '产品配置版本与发布版本不一致')
@@ -106,6 +119,8 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
         require({path.name for path in staged.iterdir()} == {
             *public_names, 'SHA256SUMS.txt',
         }, '公开目录包含未声明资产')
+        if formal:
+            verify_formal_release(staged, metadata)
 
         spec = importlib.util.spec_from_file_location(
             'publish_artifacts', ROOT / 'scripts/publish-artifacts.py')
@@ -123,6 +138,7 @@ def main():
     parser.add_argument('--version', required=True)
     parser.add_argument('--minimum-macos', required=True)
     parser.add_argument('--build-metadata', type=Path)
+    parser.add_argument('--formal', action='store_true')
     args = parser.parse_args()
     assemble(
         args.arm64_dir,
@@ -131,6 +147,7 @@ def main():
         args.version,
         args.minimum_macos,
         args.build_metadata,
+        args.formal,
     )
     return 0
 

@@ -6,6 +6,7 @@ import re
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
+DISTRIBUTION_APPROVED_STATUS = 'approved for distribution'
 
 
 def load_product(path=None):
@@ -40,6 +41,10 @@ def load_product(path=None):
     upstream = data['upstream']
     if upstream['commit'] != 'e2b22aaaba4e507a097131704bf96dabc004d9cf' or upstream['license'] != 'GPL-3.0':
         raise ValueError('固定上游来源不匹配')
+    if upstream['source_import_status'] not in (
+            'integrated from fixed upstream commit; final distribution review pending',
+            DISTRIBUTION_APPROVED_STATUS):
+        raise ValueError('上游分发审查状态无效')
     if re.fullmatch(r'[0-9a-f]{64}', upstream['archive_sha256']) is None:
         raise ValueError('上游散列格式错误')
     return data

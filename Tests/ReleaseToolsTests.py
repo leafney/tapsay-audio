@@ -33,6 +33,11 @@ assemble_spec = importlib.util.spec_from_file_location(
 assemble_release = importlib.util.module_from_spec(assemble_spec)
 assemble_spec.loader.exec_module(assemble_release)
 
+publish_release_spec = importlib.util.spec_from_file_location(
+    'publish_github_release', ROOT / 'scripts/publish-github-release.py')
+publish_github_release = importlib.util.module_from_spec(publish_release_spec)
+publish_release_spec.loader.exec_module(publish_github_release)
+
 build_packages_spec = importlib.util.spec_from_file_location(
     'build_packages', ROOT / 'scripts/build-packages.py')
 build_packages = importlib.util.module_from_spec(build_packages_spec)
@@ -113,7 +118,9 @@ class ReleaseToolsTests(unittest.TestCase):
             base = Path(t)
             config = base / 'product.json'
             output = base / 'build-metadata.json'
-            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            metadata = copy.deepcopy(load_product())
+            metadata['upstream']['source_import_status'] = 'approved for distribution'
+            config.write_text(json.dumps(metadata))
             subprocess.run([
                 sys.executable,
                 str(ROOT / 'scripts/prepare-build-metadata.py'),
@@ -137,7 +144,9 @@ class ReleaseToolsTests(unittest.TestCase):
             base = Path(t)
             config = base / 'product.json'
             output = base / 'build-metadata.json'
-            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            metadata = copy.deepcopy(load_product())
+            metadata['upstream']['source_import_status'] = 'approved for distribution'
+            config.write_text(json.dumps(metadata))
             original = config.read_bytes()
             invalid_tags = [
                 '2.30.4', 'v02.30.4', 'v2.3', 'v2.3.4-beta.1',
@@ -173,7 +182,9 @@ class ReleaseToolsTests(unittest.TestCase):
             base = Path(t)
             config = base / 'product.json'
             output = base / 'build-metadata.json'
-            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            metadata = copy.deepcopy(load_product())
+            metadata['upstream']['source_import_status'] = 'approved for distribution'
+            config.write_text(json.dumps(metadata))
             original = config.read_bytes()
             real_write_temporary = prepare_build_metadata.write_temporary
             calls = 0
@@ -191,6 +202,27 @@ class ReleaseToolsTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     prepare_build_metadata.prepare(
                         'tag', 'v1.2.3', '42', config, output)
+            self.assertEqual(config.read_bytes(), original)
+            self.assertFalse(output.exists())
+
+    def test_tag_build_metadata_requires_distribution_review(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            config = base / 'product.json'
+            output = base / 'build-metadata.json'
+            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            original = config.read_bytes()
+            result = subprocess.run([
+                sys.executable,
+                str(ROOT / 'scripts/prepare-build-metadata.py'),
+                '--mode', 'tag',
+                '--tag', 'v1.2.3',
+                '--build-number', '42',
+                '--config', str(config),
+                '--output-json', str(output),
+            ], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('第三方分发审查尚未完成', result.stderr)
             self.assertEqual(config.read_bytes(), original)
             self.assertFalse(output.exists())
 
@@ -283,6 +315,20 @@ class ReleaseToolsTests(unittest.TestCase):
                     arm64, x86_64, output, version, '14.0')
             self.assertFalse(output.exists())
 
+    def test_formal_release_rechecks_signature_and_notarization(self):
+        metadata = copy.deepcopy(load_product())
+        metadata['upstream']['source_import_status'] = 'approved for distribution'
+        failed = {
+            'content_errors': ['DMG 签名无效'],
+            'publication_pending': [],
+            'assets': [],
+        }
+        with mock.patch.object(assemble_release, 'audit', return_value=failed) as audit:
+            with self.assertRaisesRegex(ValueError, 'DMG 签名无效'):
+                assemble_release.verify_formal_release(Path('/tmp/release'), metadata)
+        audit.assert_called_once()
+        self.assertTrue(audit.call_args.kwargs['formal'])
+
     def test_manual_workflow_only_uploads_internal_artifacts(self):
         manual = (ROOT / '.github/workflows/build-artifacts.yml').read_text()
         shared = (ROOT / '.github/workflows/package-arch.yml').read_text()
@@ -303,13 +349,18 @@ class ReleaseToolsTests(unittest.TestCase):
     def test_tag_release_workflow_requires_developer_id(self):
         release = (ROOT / '.github/workflows/release.yml').read_text()
         shared = (ROOT / '.github/workflows/package-arch.yml').read_text()
+        publisher = (ROOT / 'scripts/publish-github-release.py').read_text()
         self.assertIn('tags:', release)
         self.assertIn('v*', release)
         self.assertNotIn('workflow_dispatch:', release)
         self.assertNotIn('pull_request:', release)
         self.assertEqual(release.count('signing_mode: developer-id'), 2)
-        self.assertIn('--prerelease', release)
-        self.assertIn('--verify-tag', release)
+        self.assertIn('--formal', release)
+        self.assertIn('publish-github-release.py', release)
+        self.assertNotIn('gh release create', release)
+        self.assertIn('--draft', publisher)
+        self.assertIn('--prerelease', publisher)
+        self.assertIn('--verify-tag', publisher)
         self.assertIn('signing_mode', shared)
         self.assertNotIn('BUILD-RESULT.json', release)
         self.assertNotIn('*.pkg', release)
@@ -373,6 +424,107 @@ class ReleaseToolsTests(unittest.TestCase):
                 build_packages.subprocess, 'run', side_effect=[invalid, log]):
             with self.assertRaisesRegex(ValueError, 'Apple 公证未通过：Invalid'):
                 build_packages.notarize(Path('/tmp/image.dmg'), environment)
+
+    def test_github_release_uses_draft_and_verifies_assets(self):
+        with tempfile.TemporaryDirectory() as t:
+            directory = Path(t)
+            version = '9.9.9'
+            names = [
+                f'TapSayAudio-2ch-{version}-arm64.dmg',
+                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-source.tar.gz',
+                'SHA256SUMS.txt',
+            ]
+            for index, name in enumerate(names):
+                (directory / name).write_bytes(str(index).encode())
+
+            class FakeGh:
+                def __init__(self):
+                    self.calls = []
+                    self.created = False
+                    self.published = False
+
+                def state(self):
+                    return json.dumps({
+                        'isDraft': self.created and not self.published,
+                        'isPrerelease': self.published,
+                        'name': 'TapSay Audio ' + version,
+                        'assets': [
+                            {'name': name, 'size': (directory / name).stat().st_size}
+                            for name in names
+                        ],
+                    })
+
+                def __call__(self, args, **kwargs):
+                    self.calls.append(args)
+                    command = args[1:3]
+                    if command == ['release', 'view']:
+                        if not self.created:
+                            return subprocess.CompletedProcess(
+                                args, 1, '', 'release not found')
+                        return subprocess.CompletedProcess(args, 0, self.state(), '')
+                    if command == ['release', 'create']:
+                        self.created = True
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    if command == ['release', 'upload']:
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    if command == ['release', 'edit']:
+                        self.published = True
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    raise AssertionError('unexpected command: ' + ' '.join(args))
+
+            runner = FakeGh()
+            publish_github_release.publish_release(
+                'v' + version, version, directory, runner)
+            self.assertEqual(runner.calls[0][1:3], ['release', 'view'])
+            create_call = next(call for call in runner.calls if call[1:3] == ['release', 'create'])
+            self.assertIn('--draft', create_call)
+            edit_call = next(call for call in runner.calls if call[1:3] == ['release', 'edit'])
+            self.assertIn('--draft=false', edit_call)
+            self.assertIn('--prerelease', edit_call)
+
+    def test_github_release_upload_failure_removes_only_draft(self):
+        with tempfile.TemporaryDirectory() as t:
+            directory = Path(t)
+            version = '9.9.9'
+            for name in (
+                f'TapSayAudio-2ch-{version}-arm64.dmg',
+                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-source.tar.gz',
+                'SHA256SUMS.txt',
+            ):
+                (directory / name).write_bytes(name.encode())
+
+            class FailingGh:
+                def __init__(self):
+                    self.calls = []
+                    self.created = False
+
+                def __call__(self, args, **kwargs):
+                    self.calls.append(args)
+                    command = args[1:3]
+                    if command == ['release', 'view']:
+                        if not self.created:
+                            return subprocess.CompletedProcess(
+                                args, 1, '', 'release not found')
+                        raise AssertionError('draft state is not expected after upload failure')
+                    if command == ['release', 'create']:
+                        self.created = True
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    if command == ['release', 'upload']:
+                        return subprocess.CompletedProcess(args, 1, '', 'upload failed')
+                    if command == ['release', 'delete']:
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    raise AssertionError('unexpected command: ' + ' '.join(args))
+
+            runner = FailingGh()
+            with self.assertRaisesRegex(
+                    publish_github_release.ReleaseError, 'upload failed'):
+                publish_github_release.publish_release(
+                    'v' + version, version, directory, runner)
+            delete_call = next(call for call in runner.calls if call[1:3] == ['release', 'delete'])
+            self.assertIn('--yes', delete_call)
+            self.assertNotIn('--cleanup-tag', delete_call)
 
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:
