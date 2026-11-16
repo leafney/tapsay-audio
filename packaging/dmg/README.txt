@@ -6,7 +6,7 @@ TapSay Audio 2ch
 - GPLv3 完整条款见 GPL-3.0.txt。
 - BlackHole 上游来源和第三方许可说明见“第三方许可说明.md”。
 
-安装：双击 TapSayAudio-2ch-@VERSION@.pkg。
+安装：双击 TapSayAudio-2ch-@VERSION@-@ARCH@.pkg。
 卸载：双击“卸载 TapSay Audio.app”。
 卸载完成：工具确认驱动文件、安装状态、收据及系统设备均已移除，并已清理可安全确认归属的旧版安装材料。
 声卡已卸载，部分历史材料未清理：设备和专属安装文件已移除；提示中会列出仍保留的历史材料路径。
@@ -17,7 +17,7 @@ TapSay Audio 2ch
 
 支持范围
 - macOS 14 及以上。
-- 本 DMG 只适用于 Apple Silicon arm64。
+- 本 DMG 只适用于 @PLATFORM@（@ARCH@）。
 - 固定双声道。
 - 默认采样率 48 kHz；遥控器源仍为 16 kHz 单声道，驱动不因此限制为 16 kHz。
 - 支持 8、16、24、44.1、48、88.2、96、176.4、192、352.8、384、705.6、768 kHz，均为双声道 Float32。
@@ -38,6 +38,6 @@ TapSay Audio 2ch
 - 已卸载后如仍有旧版历史材料，可直接再次运行新版卸载工具，无需重新安装声卡。
 
 状态说明
-- 当前开发包未签名、未公证。
+- @SIGNING_STATUS@
 - 只有看到 TapSay Audio 2ch 不等于真实音频链路已验证。
 - 各架构真机验收、软件版本和已知问题以正式发布说明为准。

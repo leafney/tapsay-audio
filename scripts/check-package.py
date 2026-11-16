@@ -22,10 +22,10 @@ def require(condition, message):
 
 
 def main():
-    require(len(sys.argv) == 3, "用法：check-package.py PKG arm64")
+    require(len(sys.argv) == 3, "用法：check-package.py PKG arm64|x86_64")
     pkg = Path(sys.argv[1]).resolve()
     expected_arch = sys.argv[2]
-    require(expected_arch == "arm64", f"本阶段只支持 arm64：{expected_arch}")
+    require(expected_arch in ("arm64", "x86_64"), f"目标架构无效：{expected_arch}")
     require(pkg.is_file(), f"PKG 不存在：{pkg}")
 
     with tempfile.TemporaryDirectory() as directory:
@@ -44,6 +44,10 @@ def main():
         require(
             f'version="{PRODUCT["version"]}"' in package_info,
             "PKG 版本不匹配",
+        )
+        require(
+            f'minimumSystemVersion="{PRODUCT["minimum_macos"]}"' in package_info,
+            "PKG 最低系统不匹配",
         )
 
         driver = expanded / "Scripts/package-payload/TapSayAudio.driver"
@@ -65,6 +69,14 @@ def main():
             ["/usr/bin/lipo", "-archs", str(executable)], text=True
         ).split()
         require(archs == [expected_arch], f"PKG 载荷架构为 {archs}，期望 {expected_arch}")
+        minimum_system = subprocess.check_output(
+            ["/usr/bin/xcrun", "vtool", "-show-build", str(executable)],
+            text=True,
+        )
+        require(
+            f"minos {PRODUCT['minimum_macos']}" in minimum_system,
+            "PKG 驱动最低系统不匹配",
+        )
         strings = subprocess.check_output(["/usr/bin/strings", str(executable)], text=True)
         require(DRIVER["device_uid"] in strings, "驱动设备 UID 缺失")
         require(DRIVER["device_name"] in strings, "驱动设备名称缺失")
@@ -102,6 +114,20 @@ def main():
             text=True,
         ).split()
         require(native_archs == [expected_arch], "PKG 事务工具架构不匹配")
+        subprocess.run(
+            ["/usr/bin/codesign", "--verify", "--strict",
+             str(scripts / "TapSayAudioTransaction")],
+            check=True,
+        )
+        transaction_system = subprocess.check_output(
+            ["/usr/bin/xcrun", "vtool", "-show-build",
+             str(scripts / "TapSayAudioTransaction")],
+            text=True,
+        )
+        require(
+            f"minos {PRODUCT['minimum_macos']}" in transaction_system,
+            "PKG 事务工具最低系统不匹配",
+        )
         transaction_source = (ROOT / "Tools/Transaction/main.swift").read_text(encoding="utf-8")
         require("case \"uninstall\"" in transaction_source, "原生事务工具缺少卸载入口")
         for source in (

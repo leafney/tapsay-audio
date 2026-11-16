@@ -42,10 +42,13 @@ class ReleaseToolsTests(unittest.TestCase):
             for name in ['TapSayAudioUninstaller', 'TapSayAudioTransaction']:
                 (native / name).write_text('test executable')
             app = base / 'app'
-            render_uninstaller(app, metadata, native)
+            render_uninstaller(app, metadata, native, 'arm64')
             info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
             self.assertEqual((info['CFBundleShortVersionString'], info['CFBundleVersion']), ('0.1.1', '2'))
             self.assertEqual(json.loads((app / 'Contents/Resources/product.json').read_text()), metadata)
+            self.assertTrue((app / 'Contents/MacOS/TapSayAudioUninstaller-arm64').is_file())
+            self.assertTrue((app / 'Contents/MacOS/TapSayAudioTransaction-arm64').is_file())
+            self.assertFalse((app / 'Contents/MacOS/TapSayAudioTransaction-x86_64').exists())
             for bad in ['../release', '0.1.1\n', '01.1.0', '0.1', '']:
                 metadata['product']['version'] = bad
                 config.write_text(json.dumps(metadata))
@@ -228,7 +231,8 @@ class ReleaseToolsTests(unittest.TestCase):
             (output/'old.pkg').write_bytes(b'previous package')
             (output/'SHA256SUMS.txt').write_bytes(b'previous checksums')
             with mock.patch.object(builder.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'injected')):
-                with self.assertRaises(subprocess.CalledProcessError): builder.build(output)
+                with self.assertRaises(subprocess.CalledProcessError):
+                    builder.build('arm64', output)
             self.assertEqual((output/'old.pkg').read_bytes(), b'previous package')
             self.assertEqual((output/'SHA256SUMS.txt').read_bytes(), b'previous checksums')
             self.assertFalse(list(Path(t).glob('.tapsay-package-*')))

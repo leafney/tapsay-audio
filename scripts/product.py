@@ -45,9 +45,15 @@ def load_product(path=None):
     return data
 
 
-def render_uninstaller(destination, metadata, native):
+def render_uninstaller(destination, metadata, native, architecture):
+    if architecture not in ('arm64', 'x86_64'):
+        raise ValueError('卸载工具架构无效：' + str(architecture))
     destination, native = Path(destination), Path(native)
     shutil.copytree(ROOT / 'Uninstaller.app', destination)
+    executable_directory = destination / 'Contents/MacOS'
+    for pattern in ('TapSayAudioUninstaller-*', 'TapSayAudioTransaction-*'):
+        for stale in executable_directory.glob(pattern):
+            stale.unlink()
     info_path = destination / 'Contents/Info.plist'
     info = plistlib.loads(info_path.read_bytes())
     info.update(CFBundleShortVersionString=metadata['product']['version'],
@@ -58,6 +64,8 @@ def render_uninstaller(destination, metadata, native):
     resources = destination / 'Contents/Resources'
     resources.mkdir(exist_ok=True)
     (resources / 'product.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2)+'\n')
-    for name, source in [('TapSayAudioUninstaller','TapSayAudioUninstaller'),
-                         ('TapSayAudioTransaction-arm64','TapSayAudioTransaction')]:
-        shutil.copy2(native / source, destination / 'Contents/MacOS' / name)
+    for name, source in [
+        ('TapSayAudioUninstaller-' + architecture, 'TapSayAudioUninstaller'),
+        ('TapSayAudioTransaction-' + architecture, 'TapSayAudioTransaction'),
+    ]:
+        shutil.copy2(native / source, executable_directory / name)
