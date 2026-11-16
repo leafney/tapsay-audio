@@ -18,6 +18,9 @@ def main():
     if (result.get('driver_mode') != 'reference-with-property-fixes'
             or result.get('patches_sha256') != {name: hashes[name] for name in PATCHES}):
         raise ValueError('本次构建记录未匹配已声明修复补丁')
+    architecture = result.get('architecture')
+    if architecture not in ('arm64', 'x86_64'):
+        raise ValueError('构建记录中的架构无效')
     bundle, source = Path(result['bundle']), Path(result['source'])
     digest = hashlib.sha256((bundle / 'Contents/MacOS/TapSayAudio').read_bytes()).hexdigest()
     if digest != result['driver_sha256']:
@@ -25,7 +28,7 @@ def main():
     for command in [
         ['python3', str(ROOT / 'Tests/DriverSourceTests.py')],
         ['python3', str(ROOT / 'scripts/check-reference-source.py'), str(source)],
-        ['python3', str(ROOT / 'scripts/check-driver-artifact.py'), str(bundle), 'arm64'],
+        ['python3', str(ROOT / 'scripts/check-driver-artifact.py'), str(bundle), architecture],
         ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'formats'],
         ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'plugin-properties'],
         ['bash', str(ROOT / 'scripts/test-hal-contract.sh'), str(source / 'BlackHole/BlackHole.c'), 'control-matrix'],

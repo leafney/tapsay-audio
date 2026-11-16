@@ -7,8 +7,10 @@ from pathlib import Path
 from product import load_product
 
 def main():
-    if len(sys.argv)!=3 or sys.argv[2]!='arm64':
-        raise ValueError('用法：check-driver-artifact.py BUNDLE arm64')
+    valid_architectures = ('arm64', 'x86_64')
+    if len(sys.argv) != 3 or sys.argv[2] not in valid_architectures:
+        raise ValueError('用法：check-driver-artifact.py BUNDLE arm64|x86_64')
+    expected_architecture = sys.argv[2]
     bundle=Path(sys.argv[1]); m=load_product(); d=m['driver']; p=m['product']
     info=plistlib.loads((bundle/'Contents/Info.plist').read_bytes())
     for key,value in {'CFBundleIdentifier':d['bundle_identifier'],
@@ -18,8 +20,10 @@ def main():
     if info['CFPlugInFactories']!={d['plugin_factory_uuid']:'TapSayAudio_Create'}:
         raise ValueError('工厂入口不一致')
     binary=bundle/'Contents/MacOS'/d['executable_name']
-    if subprocess.check_output(['lipo','-archs',str(binary)],text=True).strip()!='arm64':
-        raise ValueError('产物不是 arm64')
+    actual_architectures=subprocess.check_output(
+        ['lipo','-archs',str(binary)],text=True).split()
+    if actual_architectures != [expected_architecture]:
+        raise ValueError('产物架构不是 '+expected_architecture)
     settings=subprocess.check_output(['xcrun','vtool','-show-build',str(binary)],text=True)
     if 'minos '+p['minimum_macos'] not in settings: raise ValueError('最低系统不一致')
     strings=subprocess.check_output(['strings',str(binary)],text=True)

@@ -6,6 +6,7 @@ import re
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
+DISTRIBUTION_APPROVED_STATUS = 'approved for distribution'
 
 
 def load_product(path=None):
@@ -31,31 +32,47 @@ def load_product(path=None):
     for key, value in expected.items():
         if d.get(key) != value:
             raise ValueError('稳定驱动合同不匹配：' + key)
-    if p['name'] != 'TapSay Audio' or p['architectures'] != ['arm64'] or p['minimum_macos'] != '14.0':
+    if (p['name'] != 'TapSay Audio'
+            or p['architectures'] != ['arm64', 'x86_64']
+            or p['minimum_macos'] != '14.0'):
         raise ValueError('产品名称或平台合同不匹配')
     if u['bundle_identifier'] != 'com.leafney.tapsay.audio.uninstaller':
         raise ValueError('卸载入口标识不匹配')
     upstream = data['upstream']
     if upstream['commit'] != 'e2b22aaaba4e507a097131704bf96dabc004d9cf' or upstream['license'] != 'GPL-3.0':
         raise ValueError('固定上游来源不匹配')
+    if upstream['source_import_status'] not in (
+            'integrated from fixed upstream commit; final distribution review pending',
+            DISTRIBUTION_APPROVED_STATUS):
+        raise ValueError('上游分发审查状态无效')
     if re.fullmatch(r'[0-9a-f]{64}', upstream['archive_sha256']) is None:
         raise ValueError('上游散列格式错误')
     return data
 
 
-def render_uninstaller(destination, metadata, native):
+def render_uninstaller(destination, metadata, native, architecture):
+    if architecture not in ('arm64', 'x86_64'):
+        raise ValueError('卸载工具架构无效：' + str(architecture))
     destination, native = Path(destination), Path(native)
     shutil.copytree(ROOT / 'Uninstaller.app', destination)
+    executable_directory = destination / 'Contents/MacOS'
+    (executable_directory / 'TapSayAudioUninstaller').unlink(missing_ok=True)
+    for pattern in ('TapSayAudioUninstaller-*', 'TapSayAudioTransaction-*'):
+        for stale in executable_directory.glob(pattern):
+            stale.unlink()
     info_path = destination / 'Contents/Info.plist'
     info = plistlib.loads(info_path.read_bytes())
     info.update(CFBundleShortVersionString=metadata['product']['version'],
                 CFBundleVersion=metadata['product']['build_number'],
                 CFBundleIdentifier=metadata['uninstaller']['bundle_identifier'],
+                CFBundleExecutable='TapSayAudioUninstaller-' + architecture,
                 LSMinimumSystemVersion=metadata['product']['minimum_macos'])
     info_path.write_bytes(plistlib.dumps(info))
     resources = destination / 'Contents/Resources'
     resources.mkdir(exist_ok=True)
     (resources / 'product.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2)+'\n')
-    for name, source in [('TapSayAudioUninstaller','TapSayAudioUninstaller'),
-                         ('TapSayAudioTransaction-arm64','TapSayAudioTransaction')]:
-        shutil.copy2(native / source, destination / 'Contents/MacOS' / name)
+    for name, source in [
+        ('TapSayAudioUninstaller-' + architecture, 'TapSayAudioUninstaller'),
+        ('TapSayAudioTransaction-' + architecture, 'TapSayAudioTransaction'),
+    ]:
+        shutil.copy2(native / source, executable_directory / name)

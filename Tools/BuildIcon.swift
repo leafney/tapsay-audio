@@ -5,6 +5,7 @@ import Foundation
 
 let directory = URL(fileURLWithPath: CommandLine.arguments[1])
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+var pngBySize: [Int: Data] = [:]
 for points in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
         let size = points * scale
@@ -26,6 +27,38 @@ for points in [16, 32, 128, 256, 512] {
         }
         NSGraphicsContext.restoreGraphicsState()
         let name = "icon_\(points)x\(points)" + (scale == 2 ? "@2x" : "") + ".png"
-        try bitmap.representation(using: .png, properties: [:])!.write(to: directory.appendingPathComponent(name))
+        let png = bitmap.representation(using: .png, properties: [:])!
+        try png.write(to: directory.appendingPathComponent(name))
+        pngBySize[size] = png
     }
+}
+
+if CommandLine.arguments.count > 2 {
+    func appendBigEndian(_ value: UInt32, to data: inout Data) {
+        data.append(UInt8((value >> 24) & 0xff))
+        data.append(UInt8((value >> 16) & 0xff))
+        data.append(UInt8((value >> 8) & 0xff))
+        data.append(UInt8(value & 0xff))
+    }
+
+    let iconTypes: [(size: Int, type: String)] = [
+        (16, "icp4"), (32, "icp5"), (64, "icp6"), (128, "ic07"),
+        (256, "ic08"), (512, "ic09"), (1024, "ic10")
+    ]
+    var icns = Data("icns".utf8)
+    var totalSize = UInt32(8)
+    for (size, _) in iconTypes {
+        guard let png = pngBySize[size] else {
+            throw NSError(domain: "TapSayAudioIcon", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "缺少 \(size)x\(size) 图标"])
+        }
+        totalSize += UInt32(8 + png.count)
+    }
+    appendBigEndian(totalSize, to: &icns)
+    for (size, type) in iconTypes {
+        icns.append(contentsOf: type.utf8)
+        appendBigEndian(UInt32(8 + pngBySize[size]!.count), to: &icns)
+        icns.append(pngBySize[size]!)
+    }
+    try icns.write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
 }

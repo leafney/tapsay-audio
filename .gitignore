@@ -9,3 +9,21 @@ Uninstaller.app/Contents/MacOS/TapSayAudioUninstaller-*
 
 .*.build.lock
 .tapsay-package-*/
+
+# 签名证书、私钥和描述文件
+*.p12
+*.pfx
+*.p8
+*.cer
+*.crt
+*.key
+*.pem
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+
+# 本地环境配置
+.env
+.env.*
+!.env.example
