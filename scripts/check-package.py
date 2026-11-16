@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify package identity, payload architecture, scripts, and uninstaller."""
 
+import argparse
 import json
 import plistlib
 import subprocess
@@ -22,10 +23,14 @@ def require(condition, message):
 
 
 def main():
-    require(len(sys.argv) == 3, "用法：check-package.py PKG arm64|x86_64")
-    pkg = Path(sys.argv[1]).resolve()
-    expected_arch = sys.argv[2]
-    require(expected_arch in ("arm64", "x86_64"), f"目标架构无效：{expected_arch}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("pkg", type=Path)
+    parser.add_argument("architecture", choices=("arm64", "x86_64"))
+    parser.add_argument(
+        "--signing-mode", choices=("adhoc", "developer-id"), default="adhoc")
+    args = parser.parse_args()
+    pkg = args.pkg.resolve()
+    expected_arch = args.architecture
     require(pkg.is_file(), f"PKG 不存在：{pkg}")
 
     with tempfile.TemporaryDirectory() as directory:
@@ -119,6 +124,17 @@ def main():
              str(scripts / "TapSayAudioTransaction")],
             check=True,
         )
+        if args.signing_mode == "developer-id":
+            signature = subprocess.run(
+                ["/usr/sbin/pkgutil", "--check-signature", str(pkg)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            require(
+                "Developer ID Installer" in signature.stdout,
+                "PKG 未使用 Developer ID Installer 签名",
+            )
         transaction_system = subprocess.check_output(
             ["/usr/bin/xcrun", "vtool", "-show-build",
              str(scripts / "TapSayAudioTransaction")],

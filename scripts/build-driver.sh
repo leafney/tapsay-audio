@@ -3,6 +3,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 arch=""
+signing_mode="adhoc"
+application_identity=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --arch)
@@ -11,6 +13,22 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       arch="$2"
+      shift 2
+      ;;
+    --signing-mode)
+      if [[ $# -lt 2 ]]; then
+        echo "--signing-mode 缺少参数" >&2
+        exit 2
+      fi
+      signing_mode="$2"
+      shift 2
+      ;;
+    --application-identity)
+      if [[ $# -lt 2 ]]; then
+        echo "--application-identity 缺少参数" >&2
+        exit 2
+      fi
+      application_identity="$2"
       shift 2
       ;;
     *)
@@ -26,6 +44,17 @@ case "$arch" in
     exit 2
     ;;
 esac
+case "$signing_mode" in
+  adhoc|developer-id) ;;
+  *)
+    echo "--signing-mode 只能是 adhoc 或 developer-id" >&2
+    exit 2
+    ;;
+esac
+if [[ "$signing_mode" == "developer-id" && -z "$application_identity" ]]; then
+  echo "Developer ID 模式缺少应用签名身份" >&2
+  exit 2
+fi
 export LC_ALL=C
 python3 "$root/scripts/check-metadata.py"
 
@@ -74,7 +103,11 @@ esac
 xcrun swiftc -O -target "$host_arch-apple-macosx14.0" -module-cache-path "$work/module-cache" \
   "$root/Tools/BuildIcon.swift" -o "$work/build-icon"
 "$work/build-icon" "$work/TapSayAudio.iconset" "$output/Contents/Resources/TapSayAudio.icns"
-codesign --force --deep --sign - --timestamp=none "$output"
+if [[ "$signing_mode" == "adhoc" ]]; then
+  codesign --force --deep --sign - --timestamp=none "$output"
+else
+  codesign --force --deep --options runtime --sign "$application_identity" --timestamp "$output"
+fi
 
 plist="$output/Contents/Info.plist"
 binary="$output/Contents/MacOS/TapSayAudio"
@@ -92,16 +125,17 @@ strings "$binary" | grep -Fxq 'TapSay Audio 2ch'
 shasum -a 256 "$binary" > "$work/binary.sha256"
 python3 - "$output" "$source" \
   "${TAPSAY_BUILD_RESULT:-$root/.build/latest-driver-$arch.json}" \
-  "$root" "$arch" "$version" "$build_number" <<'PY'
+  "$root" "$arch" "$version" "$build_number" "$signing_mode" <<'PY'
 import hashlib, json, pathlib, sys
 bundle, source, result, root = map(pathlib.Path, sys.argv[1:5])
-architecture, version, build_number = sys.argv[5:]
+architecture, version, build_number, signing_mode = sys.argv[5:]
 sys.path.insert(0, str(root / 'scripts'))
 from driver_sources import PATCHES, verify_inputs
 hashes = verify_inputs()
 binary = bundle / 'Contents/MacOS/TapSayAudio'
 data = {'bundle': str(bundle), 'source': str(source), 'architecture': architecture,
         'version': version, 'build_number': build_number, 'minimum_macos': '14.0',
+        'signing_mode': signing_mode,
         'driver_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
         'driver_mode': 'reference-with-property-fixes',
         'patches_sha256': {name: hashes[name] for name in PATCHES}}

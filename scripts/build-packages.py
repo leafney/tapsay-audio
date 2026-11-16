@@ -14,6 +14,14 @@ import tempfile
 from product import ROOT, load_product, render_uninstaller
 
 ARCHITECTURES = ('arm64', 'x86_64')
+DEVELOPER_ID_ENVIRONMENT = (
+    'DEVELOPER_ID_APPLICATION_IDENTITY',
+    'DEVELOPER_ID_INSTALLER_IDENTITY',
+    'APPLE_TEAM_ID',
+    'APP_STORE_CONNECT_ISSUER_ID',
+    'APP_STORE_CONNECT_KEY_ID',
+    'APP_STORE_CONNECT_PRIVATE_KEY_PATH',
+)
 
 
 def signing_status(signing_mode, architecture):
@@ -23,16 +31,41 @@ def signing_status(signing_mode, architecture):
     return 'Developer ID 已签名并公证。'
 
 
+def developer_id_environment():
+    missing = [name for name in DEVELOPER_ID_ENVIRONMENT if not os.environ.get(name)]
+    if missing:
+        raise ValueError('Developer ID 环境缺失：' + ', '.join(missing))
+    return {name: os.environ[name] for name in DEVELOPER_ID_ENVIRONMENT}
+
+
+def verify_developer_identities(environment):
+    for kind, variable in (
+        ('Developer ID Application', 'DEVELOPER_ID_APPLICATION_IDENTITY'),
+        ('Developer ID Installer', 'DEVELOPER_ID_INSTALLER_IDENTITY'),
+    ):
+        identity = environment[variable]
+        result = subprocess.run(
+            ['/usr/bin/security', 'find-identity', '-v', '-p', 'codesigning'],
+            text=True,
+            capture_output=True,
+        )
+        result.check_returncode()
+        if f'{kind}: {identity}' not in result.stdout:
+            raise ValueError(kind + ' 身份不可用')
+
+
 def build(architecture, output, signing_mode='adhoc'):
     if architecture not in ARCHITECTURES:
         raise ValueError('目标架构无效：' + str(architecture))
     metadata = load_product()
     if architecture not in metadata['product']['architectures']:
         raise ValueError('目标架构不在产品配置中：' + architecture)
-    if signing_mode == 'developer-id':
-        raise ValueError('Developer ID 签名阶段尚未配置')
-    if signing_mode != 'adhoc':
+    if signing_mode not in ('adhoc', 'developer-id'):
         raise ValueError('签名模式无效：' + str(signing_mode))
+    signing_environment = None
+    if signing_mode == 'developer-id':
+        signing_environment = developer_id_environment()
+        verify_developer_identities(signing_environment)
 
     output = Path(output).absolute()
     if output == ROOT or output in ROOT.parents or output.is_symlink():
@@ -58,14 +91,31 @@ def build(architecture, output, signing_mode='adhoc'):
                 'TapSayAudioDiagnose',
                 'TapSayAudioLoopback',
             ):
-                run([
-                    '/usr/bin/codesign', '--force', '--sign', '-',
-                    '--timestamp=none', str(native / name),
-                ])
+                signing_arguments = [
+                    '/usr/bin/codesign', '--force', '--options', 'runtime',
+                ]
+                if signing_mode == 'adhoc':
+                    signing_arguments.extend(['--sign', '-', '--timestamp=none'])
+                else:
+                    signing_arguments.extend([
+                        '--sign',
+                        signing_environment['DEVELOPER_ID_APPLICATION_IDENTITY'],
+                        '--timestamp',
+                    ])
+                run([*signing_arguments, str(native / name)])
 
             result_path = work / ('driver-result-' + architecture + '.json')
+            driver_arguments = [
+                'bash', 'scripts/build-driver.sh', '--arch', architecture,
+                '--signing-mode', signing_mode,
+            ]
+            if signing_mode == 'developer-id':
+                driver_arguments.extend([
+                    '--application-identity',
+                    signing_environment['DEVELOPER_ID_APPLICATION_IDENTITY'],
+                ])
             run(
-                ['bash', 'scripts/build-driver.sh', '--arch', architecture],
+                driver_arguments,
                 {'TAPSAY_BUILD_RESULT': str(result_path)},
             )
             result = json.loads(result_path.read_text())
@@ -74,6 +124,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 'version': metadata['product']['version'],
                 'build_number': metadata['product']['build_number'],
                 'minimum_macos': metadata['product']['minimum_macos'],
+                'signing_mode': signing_mode,
             }
             for key, value in expected_result.items():
                 if result.get(key) != value:
@@ -107,14 +158,33 @@ def build(architecture, output, signing_mode='adhoc'):
                 '--version', version, '--install-location', '/', '--min-os-version',
                 metadata['product']['minimum_macos'], str(package),
             ])
-            run(['python3', 'scripts/check-package.py', str(package), architecture])
+            if signing_mode == 'developer-id':
+                signed_package = release / (prefix + '-signed.pkg')
+                run([
+                    '/usr/bin/productsign', '--sign',
+                    signing_environment['DEVELOPER_ID_INSTALLER_IDENTITY'],
+                    str(package), str(signed_package),
+                ])
+                signed_package.replace(package)
+            run([
+                'python3', 'scripts/check-package.py', str(package), architecture,
+                '--signing-mode', signing_mode,
+            ])
 
             app = image_root / (metadata['uninstaller']['display_name'] + '.app')
             render_uninstaller(app, metadata, native, architecture)
-            run([
-                '/usr/bin/codesign', '--force', '--deep', '--sign', '-',
-                '--timestamp=none', str(app),
-            ])
+            app_arguments = [
+                '/usr/bin/codesign', '--force', '--deep', '--options', 'runtime',
+            ]
+            if signing_mode == 'adhoc':
+                app_arguments.extend(['--sign', '-', '--timestamp=none'])
+            else:
+                app_arguments.extend([
+                    '--sign',
+                    signing_environment['DEVELOPER_ID_APPLICATION_IDENTITY'],
+                    '--timestamp',
+                ])
+            run([*app_arguments, str(app)])
             run(['python3', 'scripts/check-uninstaller.py', str(app), architecture])
             shutil.copy2(package, image_root / package.name)
 
@@ -136,6 +206,27 @@ def build(architecture, output, signing_mode='adhoc'):
                 '-srcfolder', str(image_root), '-format', 'UDZO', str(image),
             ])
             run(['python3', 'scripts/check-dmg.py', str(image), architecture])
+            if signing_mode == 'developer-id':
+                run([
+                    '/usr/bin/codesign', '--force', '--options', 'runtime',
+                    '--sign',
+                    signing_environment['DEVELOPER_ID_APPLICATION_IDENTITY'],
+                    '--timestamp', str(image),
+                ])
+                run([
+                    '/usr/bin/xcrun', 'notarytool', 'submit', str(image),
+                    '--key', signing_environment['APP_STORE_CONNECT_PRIVATE_KEY_PATH'],
+                    '--key-id', signing_environment['APP_STORE_CONNECT_KEY_ID'],
+                    '--issuer', signing_environment['APP_STORE_CONNECT_ISSUER_ID'],
+                    '--wait',
+                ])
+                run(['/usr/bin/xcrun', 'stapler', 'staple', str(image)])
+                run(['/usr/bin/xcrun', 'stapler', 'validate', str(image)])
+                run([
+                    '/usr/sbin/spctl', '--assess', '--type', 'open',
+                    '--context', 'context:primary-signature', '-v', str(image),
+                ])
+                run(['/usr/bin/codesign', '--verify', '--strict', str(image)])
 
             assets = [package.name, image.name]
             (release / 'SHA256SUMS.txt').write_text(''.join(

@@ -48,6 +48,7 @@ def verify_single_architecture(directory, architecture, version):
     subprocess.run([
         'python3', str(ROOT / 'scripts/check-package.py'),
         str(directory / names[0]), architecture,
+        '--signing-mode', 'developer-id',
     ], check=True, cwd=ROOT)
     subprocess.run([
         'python3', str(ROOT / 'scripts/check-dmg.py'),

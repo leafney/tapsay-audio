@@ -33,6 +33,11 @@ assemble_spec = importlib.util.spec_from_file_location(
 assemble_release = importlib.util.module_from_spec(assemble_spec)
 assemble_spec.loader.exec_module(assemble_release)
 
+build_packages_spec = importlib.util.spec_from_file_location(
+    'build_packages', ROOT / 'scripts/build-packages.py')
+build_packages = importlib.util.module_from_spec(build_packages_spec)
+build_packages_spec.loader.exec_module(build_packages)
+
 
 class ReleaseToolsTests(unittest.TestCase):
     def test_version_and_rendering(self):
@@ -189,6 +194,8 @@ class ReleaseToolsTests(unittest.TestCase):
         commands = [
             [str(ROOT / 'scripts/build-driver.sh')],
             [str(ROOT / 'scripts/build-driver.sh'), '--arch', 'universal2'],
+            [str(ROOT / 'scripts/build-driver.sh'),
+             '--arch', 'arm64', '--signing-mode', 'developer-id'],
             [str(ROOT / 'scripts/build-native-tools.sh')],
             [str(ROOT / 'scripts/build-native-tools.sh'), '--arch', 'arm64e'],
             [sys.executable, str(ROOT / 'scripts/check-driver-artifact.py'),
@@ -287,6 +294,38 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertIn('actions/upload-artifact@v4', shared)
         self.assertIn('if-no-files-found: error', shared)
         self.assertIn('retention-days: 14', shared)
+
+    def test_tag_release_workflow_requires_developer_id(self):
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        shared = (ROOT / '.github/workflows/package-arch.yml').read_text()
+        self.assertIn('tags:', release)
+        self.assertIn('v*', release)
+        self.assertNotIn('workflow_dispatch:', release)
+        self.assertNotIn('pull_request:', release)
+        self.assertEqual(release.count('signing_mode: developer-id'), 2)
+        self.assertIn('--prerelease', release)
+        self.assertIn('--verify-tag', release)
+        self.assertIn('signing_mode', shared)
+        self.assertNotIn('BUILD-RESULT.json', release)
+        self.assertNotIn('*.pkg', release)
+        for secret in (
+            'DEVELOPER_ID_APPLICATION_P12_BASE64',
+            'DEVELOPER_ID_APPLICATION_P12_PASSWORD',
+            'DEVELOPER_ID_INSTALLER_P12_BASE64',
+            'DEVELOPER_ID_INSTALLER_P12_PASSWORD',
+            'APPLE_TEAM_ID',
+            'APP_STORE_CONNECT_ISSUER_ID',
+            'APP_STORE_CONNECT_KEY_ID',
+            'APP_STORE_CONNECT_PRIVATE_KEY_P8_BASE64',
+        ):
+            self.assertIn(secret, shared)
+
+    def test_developer_id_build_rejects_missing_credentials(self):
+        with tempfile.TemporaryDirectory() as t:
+            with mock.patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(ValueError):
+                    build_packages.build(
+                        'arm64', Path(t) / 'output', 'developer-id')
 
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:
