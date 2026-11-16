@@ -331,22 +331,44 @@ class ReleaseToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)
             metadata = load_product(); prefix = 'TapSayAudio-2ch-' + metadata['product']['version']
+            source_sha = subprocess.check_output(
+                ['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+            build_metadata = base / 'build-metadata.json'
+            build_metadata.write_text(json.dumps({
+                'version': metadata['product']['version'],
+                'build_number': metadata['product']['build_number'],
+                'tag': 'v' + metadata['product']['version'],
+                'source_sha': source_sha,
+            }))
             subprocess.run(['bash', str(ROOT/'scripts/build-source-archive.sh')], check=True,
-                           env=dict(os.environ, OUT=t), stdout=subprocess.DEVNULL)
-            for suffix in ['.pkg', '-arm64.dmg']:
+                           env=dict(
+                               os.environ,
+                               OUT=t,
+                               TAPSAY_BUILD_METADATA=str(build_metadata),
+                           ), stdout=subprocess.DEVNULL)
+            for suffix in ['-arm64.dmg', '-x86_64.dmg']:
                 (base / (prefix + suffix)).write_bytes(b'fixture')
-            names = [prefix + suffix for suffix in ['.pkg', '-arm64.dmg', '-source.tar.gz']]
+            names = [
+                prefix + '-arm64.dmg',
+                prefix + '-x86_64.dmg',
+                prefix + '-source.tar.gz',
+            ]
             sums = ''.join(hashlib.sha256((base/n).read_bytes()).hexdigest()+'  '+n+'\n' for n in names)
             (base / 'SHA256SUMS.txt').write_text(sums)
             ok = lambda args: types.SimpleNamespace(returncode=0, stdout='', stderr='')
             self.assertEqual(exit_code(audit(base, metadata, ok)), 0)
-            self.assertEqual(exit_code(audit(base, metadata, ok), True), 2)
+            self.assertEqual(exit_code(audit(base, metadata, ok, formal=True), True), 0)
             (base/names[0]).write_bytes(b'corrupted')
             self.assertEqual(exit_code(audit(base, metadata, ok)), 1)
             (base/names[0]).write_bytes(b'fixture')
             bad_image = lambda args: types.SimpleNamespace(
-                returncode=1 if 'hdiutil' in args[0] else 0, stdout='', stderr='')
+                returncode=1 if 'check-dmg.py' in ' '.join(args) else 0,
+                stdout='', stderr='')
             self.assertEqual(exit_code(audit(base, metadata, bad_image)), 1)
+            bad_signature = lambda args: types.SimpleNamespace(
+                returncode=1 if 'stapler' in args else 0, stdout='', stderr='')
+            self.assertEqual(
+                exit_code(audit(base, metadata, bad_signature, formal=True), True), 1)
             (base/'SHA256SUMS.txt').unlink()
             self.assertEqual(exit_code(audit(base, metadata, ok)), 1)
             (base/'SHA256SUMS.txt').write_text(sums)

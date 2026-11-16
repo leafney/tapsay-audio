@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tarfile
 
@@ -33,7 +34,10 @@ def main():
         'docs/plan/2026-10-21-reference-driver-cleanup.md',
         'docs/discuss/2026-10-21-reference-driver-cleanup.md',
         'docs/plan/2026-10-22-peripheral-improvements.md',
-        'docs/discuss/2026-10-22-stable-version-review.md')}
+        'docs/discuss/2026-10-22-stable-version-review.md',
+        'docs/discuss/2026-11-16-github-actions-packaging.md',
+        'docs/plan/2026-11-16-github-actions-packaging.md',
+        'docs/implementation/2026-11-16-github-actions-packaging.md')}
     for folder, suffixes in [('Tools', {'.swift'}), ('Tests', {'.swift', '.c', '.py'}),
                              ('packaging', None), ('third_party/blackhole/upstream', None)]:
         files.update(p for p in (ROOT / folder).rglob('*')
@@ -48,6 +52,7 @@ def main():
         'publish-artifacts.py', 'build-packages.py', 'driver_sources.py', 'run-driver-contract-tests.sh',
         'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py']
     files.update(ROOT / 'scripts' / name for name in scripts)
+    files.update((ROOT / '.github/workflows').glob('*.yml'))
     for path in files:
         if not path.is_file() or path.is_symlink():
             raise RuntimeError('源码缺失或不是普通文件：' + str(path))
@@ -74,6 +79,8 @@ def main():
         if (build_metadata.get('version') != VERSION
                 or build_metadata.get('build_number') != META['product']['build_number']):
             raise RuntimeError('构建来源信息与有效产品配置不一致')
+    if re.fullmatch(r'[0-9a-f]{40}', str(build_metadata.get('source_sha', ''))) is None:
+        raise RuntimeError('构建来源信息缺少有效源码提交')
     if revision.returncode == 0:
         dirty = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True)
         provenance += '\nworking_tree=' + ('dirty' if dirty else 'clean')
