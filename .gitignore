@@ -1,0 +1,11 @@
+.build/
+dist/
+.DS_Store
+__pycache__/
+*.xcuserstate
+xcuserdata/
+Uninstaller.app/Contents/MacOS/TapSayAudioTransaction-*
+Uninstaller.app/Contents/MacOS/TapSayAudioUninstaller-*
+
+.*.build.lock
+.tapsay-package-*/

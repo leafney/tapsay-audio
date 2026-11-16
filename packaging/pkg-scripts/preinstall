@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "$(/usr/bin/uname -m)" in
+    arm64|x86_64) ;;
+    *)
+        echo "不支持的主机架构：$(/usr/bin/uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+if [[ ! -x "$SCRIPT_DIR/TapSayAudioTransaction" ]]; then
+    echo "安装包缺少原生安装事务工具" >&2
+    exit 1
+fi
+
+"$SCRIPT_DIR/TapSayAudioTransaction" preflight \
+    "$SCRIPT_DIR/package-payload/TapSayAudio.driver" \
+    --metadata "$SCRIPT_DIR/product.json"

@@ -1,0 +1,14 @@
+{
+  "upstream/BlackHole/BlackHole.c": "5194703e8923713d15159b951b8fe9a8be08e7c0fb7c05b17c8e865e4c2effb6",
+  "upstream/BlackHole/BlackHole.plist": "329be16034b1a58b05b8a1377759f1e4bf7fd410f886c5ef513bf667a99fd966",
+  "upstream/BlackHole.xcodeproj/project.pbxproj": "8346211852797b491245302d6ad5d3e6b855d3d07bf37e4d4d5b0e64656a6c88",
+  "upstream/BlackHole.xcodeproj/project.xcworkspace/contents.xcworkspacedata": "7f3b00b5c3fdb45242d7b87e1e5c4e25d1fa8129a16c94295ecc4e8ea2235c5f",
+  "upstream/BlackHole.xcodeproj/xcshareddata/xcschemes/BlackHole.xcscheme": "7dda8091fae8043c1e82ab4c96709b5dd62f177847fbf8475b39059bc47961e9",
+  "upstream/BlackHoleTests/main.c": "f0066ca843af06d9cf39e09f2e745d15ef016c3b4efd184c997e393118bea701",
+  "upstream/LICENSE": "d5134ba41d942612bdf5ab79b32b3ddc2458f55e16437390bd81be8f2e0811e0",
+  "upstream/VERSION": "902311c7bb38fa1658ff403def6158ee7378fe9d6e2e284fa1c38735c31bd30b",
+  "blackhole-device-usb.patch": "51dea42771bc432573433f76a0bfb140d9463db112d568f0192e97b5b7a2dc5f",
+  "tapsay-identity.patch": "e99ad04f5ba0e8a5ce6e6a44b4d480143ebab2af5fb49e4295b3dcfd06aa216f",
+  "plugin-properties.patch": "e98cc14654101dc7730db4dec9865d797f8c0ac639314b0b2a1b3a26a2c1be6f",
+  "control-list-properties.patch": "7d406f9a48f6b6dba21bf5bcd678796177df8aa049a2524eb971fbd525119543"
+}

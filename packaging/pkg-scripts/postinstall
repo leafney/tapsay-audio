@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PAYLOAD="$SCRIPT_DIR/package-payload/TapSayAudio.driver"
+
+if [[ ! -d "$PAYLOAD" ]]; then
+    echo "安装包载荷目录缺失" >&2
+    exit 1
+fi
+
+if ! "$SCRIPT_DIR/TapSayAudioTransaction" install \
+    "$PAYLOAD" \
+    --metadata "$SCRIPT_DIR/product.json"; then
+    echo "TapSay Audio 安装事务失败；已尝试恢复安装前版本" >&2
+    exit 1
+fi
+
+exit 0

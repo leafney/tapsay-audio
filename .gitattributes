@@ -1,0 +1,4 @@
+third_party/blackhole/LICENSE -whitespace
+third_party/blackhole/upstream/** -whitespace
+third_party/blackhole/*.patch -whitespace
+third_party/blackhole/proposals/*.patch -whitespace

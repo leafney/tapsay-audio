@@ -1,0 +1,259 @@
+--- a/BlackHole/BlackHole.c
++++ b/BlackHole/BlackHole.c
+@@ -150,51 +150,51 @@
+ 
+ 
+ #ifndef kDriver_Name
+-#define                             kDriver_Name                        "BlackHole"
++#define                             kDriver_Name                        "TapSay Audio"
+ #endif
+ 
+ #ifndef kPlugIn_BundleID
+-#define                             kPlugIn_BundleID                    "audio.existential.BlackHole2ch"
++#define                             kPlugIn_BundleID                    "com.leafney.tapsay.audio.driver"
+ #endif
+ 
+ #ifndef kPlugIn_Icon
+-#define                             kPlugIn_Icon                        "BlackHole.icns"
++#define                             kPlugIn_Icon                        "TapSayAudio.icns"
+ #endif
+ 
+ #ifndef kHas_Driver_Name_Format
+-#define                             kHas_Driver_Name_Format             true
++#define                             kHas_Driver_Name_Format             false
+ #endif
+ 
+ #if kHas_Driver_Name_Format
+ #define                             kDriver_Name_Format                 "%ich"
+-#define                             kBox_UID                            kDriver_Name kDriver_Name_Format "_UID"
+-#define                             kDevice_UID                         kDriver_Name kDriver_Name_Format "_UID"
+-#define                             kDevice2_UID                        kDriver_Name kDriver_Name_Format "_2_UID"
+-#define                             kDevice_ModelUID                    kDriver_Name kDriver_Name_Format "_ModelUID"
++#define                             kBox_UID                            "com.leafney.tapsay.audio.box"
++#define                             kDevice_UID                         "com.leafney.tapsay.audio.device.2ch"
++#define                             kDevice2_UID                        "com.leafney.tapsay.audio.device.2ch.2"
++#define                             kDevice_ModelUID                    "com.leafney.tapsay.audio.model.2ch"
+ 
+ 
+ #ifndef kDevice_Name
+-#define                             kDevice_Name                        kDriver_Name " %ich"
++#define                             kDevice_Name                        "TapSay Audio 2ch"
+ #endif
+ 
+ #ifndef kDevice2_Name
+-#define                             kDevice2_Name                       kDriver_Name " %ich 2"
++#define                             kDevice2_Name                       "TapSay Audio 2ch 2"
+ #endif
+ 
+ 
+ #else
+-#define                             kBox_UID                            kDriver_Name "_UID"
+-#define                             kDevice_UID                         kDriver_Name "_UID"
+-#define                             kDevice2_UID                        kDriver_Name "_2_UID"
+-#define                             kDevice_ModelUID                    kDriver_Name "_ModelUID"
++#define                             kBox_UID                            "com.leafney.tapsay.audio.box"
++#define                             kDevice_UID                         "com.leafney.tapsay.audio.device.2ch"
++#define                             kDevice2_UID                        "com.leafney.tapsay.audio.device.2ch.2"
++#define                             kDevice_ModelUID                    "com.leafney.tapsay.audio.model.2ch"
+ 
+ 
+ #ifndef kDevice_Name
+-#define                             kDevice_Name                        kDriver_Name " "
++#define                             kDevice_Name                        "TapSay Audio 2ch"
+ #endif
+ 
+ #ifndef kDevice2_Name
+-#define                             kDevice2_Name                       kDriver_Name " Mirror"
++#define                             kDevice2_Name                       "TapSay Audio 2ch 2"
+ #endif
+ 
+ #endif
+@@ -229,7 +229,7 @@
+ 
+ 
+ #ifndef kManufacturer_Name
+-#define                             kManufacturer_Name                  "Existential Audio Inc."
++#define                             kManufacturer_Name                  "TapSay"
+ #endif
+ 
+ #define                             kLatency_Frame_Size                 0
+@@ -346,7 +346,7 @@
+ #pragma mark Prototypes
+ 
+ //    Entry points for the COM methods
+-void*                BlackHole_Create(CFAllocatorRef inAllocator, CFUUIDRef inRequestedTypeUUID);
++void*                TapSayAudio_Create(CFAllocatorRef inAllocator, CFUUIDRef inRequestedTypeUUID);
+ static HRESULT        BlackHole_QueryInterface(void* inDriver, REFIID inUUID, LPVOID* outInterface);
+ static ULONG        BlackHole_AddRef(void* inDriver);
+ static ULONG        BlackHole_Release(void* inDriver);
+@@ -612,7 +612,7 @@
+ 
+ #pragma mark Factory
+ 
+-void*	BlackHole_Create(CFAllocatorRef inAllocator, CFUUIDRef inRequestedTypeUUID)
++void*	TapSayAudio_Create(CFAllocatorRef inAllocator, CFUUIDRef inRequestedTypeUUID)
+ {
+ 	//	This is the CFPlugIn factory function. Its job is to create the implementation for the given
+ 	//	type provided that the type is supported. Because this driver is simple and all its
+@@ -778,7 +778,7 @@
+ 	//	set the box name directly as a last resort
+ 	if(gBox_Name == NULL)
+ 	{
+-		gBox_Name = CFSTR("BlackHole Box");
++		gBox_Name = CFSTR("TapSay Audio Box");
+ 	}
+ 	
+ 	//	calculate the host ticks per frame
+@@ -1441,7 +1441,7 @@
+ 		case kAudioObjectPropertyManufacturer:
+ 			//	This is the human readable name of the maker of the plug-in.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "BlackHole_GetPlugInPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the plug-in");
+-			*((CFStringRef*)outData) = CFSTR("Apple Inc.");
++			*((CFStringRef*)outData) = CFSTR("TapSay");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+ 			
+@@ -1910,14 +1910,14 @@
+ 		case kAudioObjectPropertyModelName:
+ 			//	This is the human readable name of the maker of the box.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "BlackHole_GetBoxPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the box");
+-			*((CFStringRef*)outData) = CFSTR("BlackHole");
++			*((CFStringRef*)outData) = CFSTR("TapSay Audio");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+ 			
+ 		case kAudioObjectPropertyManufacturer:
+ 			//	This is the human readable name of the maker of the box.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "BlackHole_GetBoxPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the box");
+-			*((CFStringRef*)outData) = CFSTR("Existential Audio Inc.");
++			*((CFStringRef*)outData) = CFSTR("TapSay");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+ 			
+@@ -2103,7 +2103,7 @@
+ 			//	of this property should only send the notification if the hardware wants the app to
+ 			//	flash it's UI for the device.
+ 			{
+-				syslog(LOG_NOTICE, "The identify property has been set on the Box implemented by the BlackHole driver.");
++				syslog(LOG_NOTICE, "The identify property has been set on the Box implemented by the TapSay Audio driver.");
+ 				FailWithAction(inDataSize != sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "BlackHole_SetBoxPropertyData: wrong size for the data for kAudioObjectPropertyIdentify");
+ 				dispatch_after(dispatch_time(0, 2ULL * 1000ULL * 1000ULL * 1000ULL), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),	^()
+ 																																		{
+--- a/BlackHole/BlackHole.plist
++++ b/BlackHole/BlackHole.plist
+@@ -21,17 +21,17 @@
+ 	<key>CFBundleSignature</key>
+ 	<string>????</string>
+ 	<key>CFBundleVersion</key>
+-	<string>596</string>
++	<string>$(CURRENT_PROJECT_VERSION)</string>
+ 	<key>CFPlugInFactories</key>
+ 	<dict>
+-		<key>4a91361d-19af-4ba0-a87a-0a6242ed6ae4</key>
+-		<string>BlackHole_Create</string>
++		<key>CC1226D1-A123-47B7-B113-5228AB089AA8</key>
++		<string>TapSayAudio_Create</string>
+ 	</dict>
+ 	<key>CFPlugInTypes</key>
+ 	<dict>
+ 		<key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+ 		<array>
+-			<string>4a91361d-19af-4ba0-a87a-0a6242ed6ae4</string>
++			<string>CC1226D1-A123-47B7-B113-5228AB089AA8</string>
+ 		</array>
+ 	</dict>
+ </dict>
+--- a/BlackHole.xcodeproj/project.pbxproj
++++ b/BlackHole.xcodeproj/project.pbxproj
+@@ -8,15 +8,12 @@
+ 
+ /* Begin PBXBuildFile section */
+ 		3D083818284A7F1200C69403 /* VERSION in Resources */ = {isa = PBXBuildFile; fileRef = 3D89662F2849BF1A002AB3F0 /* VERSION */; };
+-		3D083819284A7F1500C69403 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 2DA8FA1515FEAAB000F04B50 /* README.md */; };
+ 		3D88D48F285BBA5800629399 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 3D88D48E285BBA5800629399 /* main.c */; };
+ 		3D89663F2849C318002AB3F0 /* BlackHole.c in Sources */ = {isa = PBXBuildFile; fileRef = 2D616EF215B8C82500D598BD /* BlackHole.c */; };
+ 		3D8966412849C318002AB3F0 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D6C8E45275E92B40030C104 /* Accelerate.framework */; };
+ 		3D8966422849C318002AB3F0 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D7477EC157823CF00412279 /* CoreAudio.framework */; };
+ 		3D8966432849C318002AB3F0 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D7477AC1578168D00412279 /* CoreFoundation.framework */; };
+ 		3D8966462849C318002AB3F0 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 03FDCADB233FAE0500101681 /* LICENSE */; };
+-		3D8966472849C318002AB3F0 /* BlackHole.icns in Resources */ = {isa = PBXBuildFile; fileRef = 03FDCAD9233F235500101681 /* BlackHole.icns */; };
+-		3D8966482849C318002AB3F0 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = 039FF2572341B6E800400D7A /* CHANGELOG.md */; };
+ /* End PBXBuildFile section */
+ 
+ /* Begin PBXCopyFilesBuildPhase section */
+@@ -32,13 +29,10 @@
+ /* End PBXCopyFilesBuildPhase section */
+ 
+ /* Begin PBXFileReference section */
+-		039FF2572341B6E800400D7A /* CHANGELOG.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = CHANGELOG.md; sourceTree = "<group>"; };
+-		03FDCAD9233F235500101681 /* BlackHole.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = BlackHole.icns; sourceTree = "<group>"; };
+ 		03FDCADB233FAE0500101681 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+ 		2D616EF215B8C82500D598BD /* BlackHole.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = BlackHole.c; sourceTree = "<group>"; };
+ 		2D7477AC1578168D00412279 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+ 		2D7477EC157823CF00412279 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+-		2DA8FA1515FEAAB000F04B50 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+ 		2DD7AA9915EC572000C67AE1 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+ 		2DED183A15C357180091BE97 /* Kernel.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Kernel.framework; path = System/Library/Frameworks/Kernel.framework; sourceTree = SDKROOT; };
+ 		3D083806284A7BB000C69403 /* conclusion.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = conclusion.html; sourceTree = "<group>"; };
+@@ -80,7 +74,6 @@
+ 			isa = PBXGroup;
+ 			children = (
+ 				3D08380E284A7DE100C69403 /* BlackHole.plist */,
+-				03FDCAD9233F235500101681 /* BlackHole.icns */,
+ 				2D616EF215B8C82500D598BD /* BlackHole.c */,
+ 			);
+ 			path = BlackHole;
+@@ -91,9 +84,7 @@
+ 			children = (
+ 				3D083805284A7BB000C69403 /* Installer */,
+ 				3D89662F2849BF1A002AB3F0 /* VERSION */,
+-				2DA8FA1515FEAAB000F04B50 /* README.md */,
+ 				03FDCADB233FAE0500101681 /* LICENSE */,
+-				039FF2572341B6E800400D7A /* CHANGELOG.md */,
+ 				2D616EF015B8C82500D598BD /* BlackHole */,
+ 				3D88D48D285BBA5800629399 /* BlackHoleTests */,
+ 				2D7477AB1578168D00412279 /* Frameworks */,
+@@ -231,10 +222,7 @@
+ 			buildActionMask = 2147483647;
+ 			files = (
+ 				3D8966462849C318002AB3F0 /* LICENSE in Resources */,
+-				3D8966472849C318002AB3F0 /* BlackHole.icns in Resources */,
+-				3D8966482849C318002AB3F0 /* CHANGELOG.md in Resources */,
+ 				3D083818284A7F1200C69403 /* VERSION in Resources */,
+-				3D083819284A7F1500C69403 /* README.md in Resources */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+@@ -530,8 +518,8 @@
+ 				INFOPLIST_FILE = BlackHole/BlackHole.plist;
+ 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Audio/Plug-Ins/HAL";
+ 				MACOSX_DEPLOYMENT_TARGET = 10.10;
+-				MARKETING_VERSION = 0.7.1;
+-				PRODUCT_BUNDLE_IDENTIFIER = audio.existential.BlackHole;
++				MARKETING_VERSION = 0.1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.leafney.tapsay.audio.driver;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				WRAPPER_EXTENSION = driver;
+ 			};
+@@ -550,8 +538,8 @@
+ 				INFOPLIST_FILE = BlackHole/BlackHole.plist;
+ 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Audio/Plug-Ins/HAL";
+ 				MACOSX_DEPLOYMENT_TARGET = 10.10;
+-				MARKETING_VERSION = 0.7.1;
+-				PRODUCT_BUNDLE_IDENTIFIER = audio.existential.BlackHole;
++				MARKETING_VERSION = 0.1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.leafney.tapsay.audio.driver;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				WRAPPER_EXTENSION = driver;
+ 			};
+@@ -570,8 +558,8 @@
+ 				INFOPLIST_FILE = BlackHole/BlackHole.plist;
+ 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Audio/Plug-Ins/HAL";
+ 				MACOSX_DEPLOYMENT_TARGET = 10.10;
+-				MARKETING_VERSION = 0.7.1;
+-				PRODUCT_BUNDLE_IDENTIFIER = audio.existential.BlackHole;
++				MARKETING_VERSION = 0.1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.leafney.tapsay.audio.driver;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				WRAPPER_EXTENSION = driver;
+ 			};

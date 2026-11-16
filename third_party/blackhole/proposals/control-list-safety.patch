@@ -1,0 +1,83 @@
+--- a/BlackHole/BlackHole.c
++++ b/BlackHole/BlackHole.c
+@@ -567,7 +567,7 @@
+             UInt32 count = 0;
+             for (UInt32 i = 0; i < kDevice_ObjectListSize; i++)
+             {
+-                count += (kDevice_ObjectList[i].type == kObjectType_Control && (kDevice_ObjectList[i].scope == scope || scope == kAudioObjectPropertyScopeGlobal));
++                count += (kDevice_ObjectList[i].type == kObjectType_Control && (kDevice_ObjectList[i].scope == scope || scope == kAudioObjectPropertyScopeGlobal) && (gPitch_Adjust_Enabled || kDevice_ObjectList[i].id != kObjectID_Pitch_Adjust));
+             }
+ 
+             return count;
+@@ -2362,7 +2362,9 @@
+ 			break;
+ 
+ 		case kAudioObjectPropertyControlList:
++            pthread_mutex_lock(&gPlugIn_StateMutex);
+             *outDataSize = device_control_list_size(inAddress->mScope, inObjectID) * sizeof(AudioObjectID);
++            pthread_mutex_unlock(&gPlugIn_StateMutex);
+ 			break;
+ 
+ 		case kAudioDevicePropertySafetyOffset:
+@@ -2696,41 +2698,29 @@
+ 			break;
+ 
+ 		case kAudioObjectPropertyControlList:
+-			//	Calculate the number of items that have been requested. Note that this
+-			//	number is allowed to be smaller than the actual size of the list. In such
+-			//	case, only that number of items will be returned
+-
+-            theNumberItemsToFetch = minimum(inDataSize / sizeof(AudioObjectID), device_control_list_size(inAddress->mScope, inObjectID));
+-
+-            //    fill out the list with as many objects as requested
+-            switch (inObjectID) {
+-                case kObjectID_Device:
+-                    pthread_mutex_lock(&gPlugIn_StateMutex);
+-                    for (UInt32 i = 0, k = 0; k < theNumberItemsToFetch; i++)
++            {
++                // Count and copy the same active controls while holding one state snapshot.
++                pthread_mutex_lock(&gPlugIn_StateMutex);
++                const struct ObjectInfo* objects = inObjectID == kObjectID_Device
++                    ? kDevice_ObjectList : kDevice2_ObjectList;
++                const UInt32 count = inObjectID == kObjectID_Device
++                    ? kDevice_ObjectListSize : kDevice2_ObjectListSize;
++                const UInt32 capacity = inDataSize / sizeof(AudioObjectID);
++                UInt32 written = 0;
++                for (UInt32 i = 0; i < count && written < capacity; i++)
++                {
++                    if (objects[i].type == kObjectType_Control
++                        && (objects[i].scope == inAddress->mScope
++                            || inAddress->mScope == kAudioObjectPropertyScopeGlobal)
++                        && (gPitch_Adjust_Enabled || objects[i].id != kObjectID_Pitch_Adjust))
+                     {
+-                        // TODO remove hack! There must be a better way than looking for a fixed i
+-                        if ((kDevice_ObjectList[i].type == kObjectType_Control) && !(!gPitch_Adjust_Enabled && kDevice_ObjectList[i].id==kObjectID_Pitch_Adjust))
+-                        {
+-                            ((AudioObjectID*)outData)[k++] = kDevice_ObjectList[i].id;
+-                        }
++                        ((AudioObjectID*)outData)[written++] = objects[i].id;
+                     }
+-                    pthread_mutex_unlock(&gPlugIn_StateMutex);
+-                    break;
+-
+-                case kObjectID_Device2:
+-                    for (UInt32 i = 0, k = 0; k < theNumberItemsToFetch; i++)
+-                    {
+-                        if (kDevice2_ObjectList[i].type == kObjectType_Control)
+-                        {
+-                            ((AudioObjectID*)outData)[k++] = kDevice2_ObjectList[i].id;
+-                        }
+-                    }
+-                    break;
++                }
++                *outDataSize = written * sizeof(AudioObjectID);
++                pthread_mutex_unlock(&gPlugIn_StateMutex);
+             }
+-
+-			//	report how much we wrote
+-			*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+-			break;
++            break;
+ 
+ 		case kAudioDevicePropertySafetyOffset:
+ 			//	This property returns the how close to now the HAL can read and write. For
