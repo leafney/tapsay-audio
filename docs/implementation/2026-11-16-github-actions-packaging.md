@@ -142,6 +142,22 @@ bash scripts/build-packages.sh \
 
 ## 验收记录
 
-- 本地 arm64 全链路：待第 8 阶段记录。
+- 本地 arm64 全链路：通过。测试基于提交 `d0391a963a5be968fd42fc089909ec94467fbcaf`，产物目录为 `/private/tmp/tapsay-audio-arm64-test`。
+- 配置、ReleaseTools 与驱动源码测试：全部通过。
+- arm64 驱动和四个原生工具：架构检查通过，最低系统均为 macOS 14.0。
+- HAL 合同：格式、插件属性和控制列表矩阵全部通过。
+- 隔离安装事务：安装、覆盖、故障恢复、卸载与结果协议全部通过。
+- PKG、DMG 与卸载 APP：内容和架构检查通过。
+- `/usr/bin/shasum -a 256 -c SHA256SUMS.txt`：PKG 与 DMG 均为 `OK`。
+- 本地包为 ad hoc 内部测试包，不代表 Developer ID 签名或 Apple 公证已通过。
+
+arm64 实测散列：
+
+```text
+fc268a262a83a3f2d3c3eec4c988c43c067580de219081f9899b7f2c77c4a320  TapSayAudio-2ch-0.1.1-arm64.pkg
+1962f4674d2a3d2d5f1e74963f25ec18f6b73f115c5ee40a06886243a9c4bbc9  TapSayAudio-2ch-0.1.1-arm64.dmg
+```
+
+- x86_64 原生构建：等待 GitHub `macos-15-intel` Runner 执行。
 - GitHub 手动双架构 Artifact：待第 9 阶段记录。
 - 正式 Tag 发布：证书配置完成前不执行。
