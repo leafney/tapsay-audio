@@ -272,6 +272,22 @@ class ReleaseToolsTests(unittest.TestCase):
                     arm64, x86_64, output, version, '14.0')
             self.assertFalse(output.exists())
 
+    def test_manual_workflow_only_uploads_internal_artifacts(self):
+        manual = (ROOT / '.github/workflows/build-artifacts.yml').read_text()
+        shared = (ROOT / '.github/workflows/package-arch.yml').read_text()
+        self.assertIn('workflow_dispatch:', manual)
+        self.assertNotIn('push:', manual)
+        self.assertNotIn('pull_request:', manual)
+        self.assertNotIn('gh release create', manual)
+        self.assertNotIn('gh release upload', manual)
+        self.assertIn('architecture: arm64', manual)
+        self.assertIn('architecture: x86_64', manual)
+        self.assertIn('signing_mode: adhoc', manual)
+        self.assertIn('workflow_call:', shared)
+        self.assertIn('actions/upload-artifact@v4', shared)
+        self.assertIn('if-no-files-found: error', shared)
+        self.assertIn('retention-days: 14', shared)
+
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)

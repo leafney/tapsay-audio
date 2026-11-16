@@ -1,0 +1,47 @@
+name: Build Internal Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.product.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read product version
+        id: product
+        run: |
+          version="$(plutil -extract product.version raw -o - config/product.json)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'Internal build version: %s\n' "$version"
+
+  arm64:
+    needs: prepare
+    uses: ./.github/workflows/package-arch.yml
+    with:
+      architecture: arm64
+      runner: macos-15
+      version: ${{ needs.prepare.outputs.version }}
+      build_number: ${{ github.run_number }}
+      signing_mode: adhoc
+      metadata_mode: manual
+      tag: ""
+
+  x86_64:
+    needs: prepare
+    uses: ./.github/workflows/package-arch.yml
+    with:
+      architecture: x86_64
+      runner: macos-15-intel
+      version: ${{ needs.prepare.outputs.version }}
+      build_number: ${{ github.run_number }}
+      signing_mode: adhoc
+      metadata_mode: manual
+      tag: ""

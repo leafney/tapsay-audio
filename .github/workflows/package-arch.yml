@@ -1,0 +1,118 @@
+name: Package Architecture
+
+on:
+  workflow_call:
+    inputs:
+      architecture:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      build_number:
+        required: true
+        type: string
+      signing_mode:
+        required: true
+        type: string
+      metadata_mode:
+        required: true
+        type: string
+      tag:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate build inputs and runner
+        env:
+          INPUT_ARCHITECTURE: ${{ inputs.architecture }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_SIGNING_MODE: ${{ inputs.signing_mode }}
+          INPUT_METADATA_MODE: ${{ inputs.metadata_mode }}
+        run: |
+          set -euo pipefail
+          case "$INPUT_ARCHITECTURE" in
+            arm64|x86_64) ;;
+            *) echo "Unsupported architecture: $INPUT_ARCHITECTURE" >&2; exit 1 ;;
+          esac
+          [[ "$(uname -m)" == "$INPUT_ARCHITECTURE" ]]
+          [[ "$INPUT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$INPUT_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          case "$INPUT_SIGNING_MODE" in
+            adhoc|developer-id) ;;
+            *) echo "Unsupported signing mode: $INPUT_SIGNING_MODE" >&2; exit 1 ;;
+          esac
+          case "$INPUT_METADATA_MODE" in
+            manual|tag) ;;
+            *) echo "Unsupported metadata mode: $INPUT_METADATA_MODE" >&2; exit 1 ;;
+          esac
+
+      - name: Prepare effective product metadata
+        env:
+          INPUT_ARCHITECTURE: ${{ inputs.architecture }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_METADATA_MODE: ${{ inputs.metadata_mode }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build
+          python3 scripts/prepare-build-metadata.py \
+            --mode "$INPUT_METADATA_MODE" \
+            --tag "$INPUT_TAG" \
+            --build-number "$INPUT_BUILD_NUMBER" \
+            --config config/product.json \
+            --output-json .build/build-metadata.json
+          effective_version="$(plutil -extract product.version raw -o - config/product.json)"
+          effective_build="$(plutil -extract product.build_number raw -o - config/product.json)"
+          [[ "$effective_version" == "$INPUT_VERSION" ]]
+          [[ "$effective_build" == "$INPUT_BUILD_NUMBER" ]]
+          python3 scripts/check-metadata.py
+          python3 Tests/ReleaseToolsTests.py
+          python3 Tests/DriverSourceTests.py
+          python3 - "$INPUT_ARCHITECTURE" config/product.json <<'PY'
+          import json
+          import sys
+          architecture, config = sys.argv[1:]
+          data = json.load(open(config, encoding="utf-8"))
+          if architecture not in data["product"]["architectures"]:
+              raise SystemExit("Architecture is not enabled in product.json")
+          PY
+
+      - name: Build and verify architecture package
+        env:
+          INPUT_ARCHITECTURE: ${{ inputs.architecture }}
+          INPUT_SIGNING_MODE: ${{ inputs.signing_mode }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/tapsay-audio-artifact"
+          bash scripts/build-packages.sh \
+            --arch "$INPUT_ARCHITECTURE" \
+            --output "$output" \
+            --signing-mode "$INPUT_SIGNING_MODE"
+
+      - name: Upload architecture artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TapSayAudio-2ch-${{ inputs.version }}-${{ inputs.architecture }}-build-${{ inputs.build_number }}
+          path: |
+            ${{ runner.temp }}/tapsay-audio-artifact/*.dmg
+            ${{ runner.temp }}/tapsay-audio-artifact/*.pkg
+            ${{ runner.temp }}/tapsay-audio-artifact/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
