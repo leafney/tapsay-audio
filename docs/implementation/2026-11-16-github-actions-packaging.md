@@ -159,5 +159,6 @@ fc268a262a83a3f2d3c3eec4c988c43c067580de219081f9899b7f2c77c4a320  TapSayAudio-2c
 ```
 
 - x86_64 原生构建：等待 GitHub `macos-15-intel` Runner 执行。
-- GitHub 手动双架构 Artifact：待第 9 阶段记录。
+- GitHub 手动双架构 Artifact：本轮未能执行。本地分支比 `origin/feat/61116` 领先 8 个提交，远端分支尚无 `.github/workflows/` 文件；本机 `gh` 也未登录。没有推送分支、合并默认分支或改用个人令牌绕过该限制。
+- 解锁条件：将本次工作流提交推送并合入允许显示 `workflow_dispatch` 的分支后，在 GitHub Actions 页面手动运行 `Build Internal Artifacts`，确认两个架构成功且没有新增 Release。
 - 正式 Tag 发布：证书配置完成前不执行。
