@@ -28,6 +28,11 @@ metadata_spec = importlib.util.spec_from_file_location(
 prepare_build_metadata = importlib.util.module_from_spec(metadata_spec)
 metadata_spec.loader.exec_module(prepare_build_metadata)
 
+assemble_spec = importlib.util.spec_from_file_location(
+    'assemble_release', ROOT / 'scripts/assemble-release.py')
+assemble_release = importlib.util.module_from_spec(assemble_spec)
+assemble_spec.loader.exec_module(assemble_release)
+
 
 class ReleaseToolsTests(unittest.TestCase):
     def test_version_and_rendering(self):
@@ -192,6 +197,80 @@ class ReleaseToolsTests(unittest.TestCase):
         for command in commands:
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0, command)
+
+    def test_assemble_release_contains_only_public_assets(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            arm64 = base / 'arm64'
+            x86_64 = base / 'x86_64'
+            output = base / 'release'
+            arm64.mkdir()
+            x86_64.mkdir()
+            metadata = load_product()
+            version = metadata['product']['version']
+            for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
+                prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+                names = [prefix + '.pkg', prefix + '.dmg']
+                for name in names:
+                    (directory / name).write_bytes(architecture.encode() + b'-' + name.encode())
+                (directory / 'SHA256SUMS.txt').write_text(''.join(
+                    hashlib.sha256((directory / name).read_bytes()).hexdigest()
+                    + '  ' + name + '\n' for name in names))
+
+            def make_source_archive(directory, build_metadata):
+                del build_metadata
+                (directory / f'TapSayAudio-2ch-{version}-source.tar.gz').write_bytes(b'source')
+
+            with mock.patch.object(assemble_release.subprocess, 'run'), \
+                    mock.patch.object(
+                        assemble_release, 'build_source_archive',
+                        side_effect=make_source_archive):
+                assemble_release.assemble(
+                    arm64, x86_64, output, version, '14.0')
+
+            public_names = {
+                f'TapSayAudio-2ch-{version}-arm64.dmg',
+                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-source.tar.gz',
+                'SHA256SUMS.txt',
+            }
+            self.assertEqual({path.name for path in output.iterdir()}, public_names)
+            checksums = {
+                line.split()[1]: line.split()[0]
+                for line in (output / 'SHA256SUMS.txt').read_text().splitlines()
+            }
+            self.assertEqual(
+                set(checksums),
+                public_names - {'SHA256SUMS.txt'},
+            )
+            for name, checksum in checksums.items():
+                self.assertEqual(
+                    hashlib.sha256((output / name).read_bytes()).hexdigest(),
+                    checksum,
+                )
+
+    def test_assemble_release_rejects_bad_input_hash(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            arm64 = base / 'arm64'
+            x86_64 = base / 'x86_64'
+            output = base / 'release'
+            arm64.mkdir()
+            x86_64.mkdir()
+            metadata = load_product()
+            version = metadata['product']['version']
+            for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
+                prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+                for suffix in ('.pkg', '.dmg'):
+                    (directory / (prefix + suffix)).write_bytes(b'asset')
+                (directory / 'SHA256SUMS.txt').write_text(
+                    hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.pkg\n'
+                    + hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.dmg\n')
+            (arm64 / f'TapSayAudio-2ch-{version}-arm64.dmg').write_bytes(b'corrupted')
+            with self.assertRaises(ValueError):
+                assemble_release.assemble(
+                    arm64, x86_64, output, version, '14.0')
+            self.assertFalse(output.exists())
 
     def test_release_failures_have_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as t:

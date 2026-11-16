@@ -10,7 +10,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-import time
 
 from product import ROOT, load_product, render_uninstaller
 
@@ -50,22 +49,6 @@ def build(architecture, output, signing_mode='adhoc'):
 
             def run(args, extra=None, cwd=ROOT):
                 subprocess.run(args, check=True, cwd=cwd, env=dict(env, **(extra or {})))
-
-            def verify_disk_image(path):
-                result = None
-                for _ in range(10):
-                    result = subprocess.run(
-                        ['/usr/bin/hdiutil', 'verify', str(path)],
-                        cwd=ROOT,
-                        env=env,
-                        text=True,
-                        capture_output=True,
-                    )
-                    if result.returncode == 0:
-                        return
-                    time.sleep(1)
-                if result is not None:
-                    result.check_returncode()
 
             run(['bash', 'scripts/build-native-tools.sh', '--arch', architecture])
             native = ROOT / '.build/native' / architecture
@@ -152,7 +135,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 '-volname', 'TapSay Audio ' + architecture,
                 '-srcfolder', str(image_root), '-format', 'UDZO', str(image),
             ])
-            verify_disk_image(image)
+            run(['python3', 'scripts/check-dmg.py', str(image), architecture])
 
             assets = [package.name, image.name]
             (release / 'SHA256SUMS.txt').write_text(''.join(

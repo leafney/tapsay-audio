@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Archive the fixed reference, reviewed fixes and complete build/test tooling."""
+import argparse
 import io
 import json
 import os
@@ -15,6 +16,9 @@ PREFIX = 'TapSayAudio-2ch-' + VERSION
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--build-metadata', type=Path)
+    args = parser.parse_args()
     files = {ROOT / p for p in ('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
         '.gitignore', '.gitattributes', 'config/product.json',
         'Uninstaller.app/Contents/Info.plist',
@@ -38,6 +42,7 @@ def main():
     scripts = ['build-driver.sh', 'prepare-build-metadata.py',
         'prepare-driver-source.py', 'check-reference-source.py',
         'build-native-tools.sh', 'build-packages.sh', 'check-package.py', 'check-metadata.py',
+        'check-dmg.py', 'assemble-release.py',
         'check-uninstaller.py', 'check-release-readiness.py', 'build-source-archive.sh',
         'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',
         'publish-artifacts.py', 'build-packages.py', 'driver_sources.py', 'run-driver-contract-tests.sh',
@@ -54,9 +59,29 @@ def main():
     existing = ROOT / 'SOURCE-REVISION.txt'
     provenance = revision.stdout.strip() if revision.returncode == 0 else (
         existing.read_text().strip() if existing.exists() else 'source archive rebuild')
+    build_metadata_path = args.build_metadata
+    if build_metadata_path is None and os.environ.get('TAPSAY_BUILD_METADATA'):
+        build_metadata_path = Path(os.environ['TAPSAY_BUILD_METADATA'])
+    if build_metadata_path is None:
+        build_metadata = {
+            'version': VERSION,
+            'build_number': META['product']['build_number'],
+            'tag': '',
+            'source_sha': provenance.splitlines()[0],
+        }
+    else:
+        build_metadata = json.loads(build_metadata_path.read_text())
+        if (build_metadata.get('version') != VERSION
+                or build_metadata.get('build_number') != META['product']['build_number']):
+            raise RuntimeError('构建来源信息与有效产品配置不一致')
     if revision.returncode == 0:
         dirty = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True)
         provenance += '\nworking_tree=' + ('dirty' if dirty else 'clean')
+    provenance += (
+        '\ntag=' + str(build_metadata.get('tag', ''))
+        + '\nversion=' + VERSION
+        + '\nbuild_number=' + META['product']['build_number']
+    )
     with tarfile.open(temporary, 'w:gz') as bundle:
         for path in sorted(files):
             bundle.add(path, arcname=PREFIX + '/' + str(path.relative_to(ROOT)), recursive=False)
@@ -64,6 +89,12 @@ def main():
         entry = tarfile.TarInfo(PREFIX + '/SOURCE-REVISION.txt')
         entry.size = len(data)
         bundle.addfile(entry, io.BytesIO(data))
+        provenance_data = (
+            json.dumps(build_metadata, ensure_ascii=False, indent=2) + '\n'
+        ).encode()
+        entry = tarfile.TarInfo(PREFIX + '/BUILD-PROVENANCE.json')
+        entry.size = len(provenance_data)
+        bundle.addfile(entry, io.BytesIO(provenance_data))
     temporary.replace(archive)
     print('源码归档：' + str(archive))
 
