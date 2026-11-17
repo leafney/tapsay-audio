@@ -56,12 +56,19 @@ class ReleaseToolsTests(unittest.TestCase):
             native = base / 'native'; native.mkdir()
             for name in ['TapSayAudioUninstaller', 'TapSayAudioTransaction']:
                 (native / name).write_text('test executable')
+            icon = base / 'TapSayAudioUninstaller.icns'
+            icon.write_bytes(b'icns' + b'test')
             app = base / 'app'
-            render_uninstaller(app, metadata, native, 'arm64')
+            render_uninstaller(app, metadata, native, 'arm64', icon_path=icon)
             info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
             self.assertEqual((info['CFBundleShortVersionString'], info['CFBundleVersion']), ('0.1.1', '2'))
             self.assertEqual(info['CFBundleExecutable'], 'TapSayAudioUninstaller-arm64')
+            self.assertEqual(info['CFBundleIconFile'], 'TapSayAudioUninstaller.icns')
             self.assertEqual(json.loads((app / 'Contents/Resources/product.json').read_text()), metadata)
+            self.assertEqual(
+                (app / 'Contents/Resources/TapSayAudioUninstaller.icns').read_bytes(),
+                icon.read_bytes(),
+            )
             self.assertTrue((app / 'Contents/MacOS/TapSayAudioUninstaller-arm64').is_file())
             self.assertTrue((app / 'Contents/MacOS/TapSayAudioTransaction-arm64').is_file())
             self.assertFalse((app / 'Contents/MacOS/TapSayAudioUninstaller').exists())
@@ -253,7 +260,7 @@ class ReleaseToolsTests(unittest.TestCase):
             version = metadata['product']['version']
             for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
                 prefix = f'TapSayAudio-2ch-{version}-{architecture}'
-                names = [prefix + '.pkg', prefix + '.dmg']
+                names = [prefix + '.dmg']
                 for name in names:
                     (directory / name).write_bytes(architecture.encode() + b'-' + name.encode())
                 (directory / 'SHA256SUMS.txt').write_text(''.join(
@@ -304,11 +311,9 @@ class ReleaseToolsTests(unittest.TestCase):
             version = metadata['product']['version']
             for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
                 prefix = f'TapSayAudio-2ch-{version}-{architecture}'
-                for suffix in ('.pkg', '.dmg'):
-                    (directory / (prefix + suffix)).write_bytes(b'asset')
+                (directory / (prefix + '.dmg')).write_bytes(b'asset')
                 (directory / 'SHA256SUMS.txt').write_text(
-                    hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.pkg\n'
-                    + hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.dmg\n')
+                    hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.dmg\n')
             (arm64 / f'TapSayAudio-2ch-{version}-arm64.dmg').write_bytes(b'corrupted')
             with self.assertRaises(ValueError):
                 assemble_release.assemble(
@@ -341,7 +346,9 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertIn('architecture: x86_64', manual)
         self.assertIn('signing_mode: adhoc', manual)
         self.assertIn('workflow_call:', shared)
-        self.assertIn('actions/upload-artifact@v4', shared)
+        self.assertIn('actions/upload-artifact@v7', shared)
+        self.assertIn('*.dmg', shared)
+        self.assertNotIn('*.pkg', shared)
         self.assertIn('if-no-files-found: error', shared)
         self.assertIn('retention-days: 14', shared)
         self.assertIn('overwrite: true', shared)
@@ -358,6 +365,7 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertIn('--formal', release)
         self.assertIn('publish-github-release.py', release)
         self.assertNotIn('gh release create', release)
+        self.assertEqual(release.count('actions/download-artifact@v8'), 2)
         self.assertIn('--draft', publisher)
         self.assertIn('--prerelease', publisher)
         self.assertIn('--verify-tag', publisher)
@@ -583,12 +591,12 @@ class ReleaseToolsTests(unittest.TestCase):
         builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
         with tempfile.TemporaryDirectory() as t:
             output = Path(t)/'dist'; output.mkdir()
-            (output/'old.pkg').write_bytes(b'previous package')
+            (output/'old.dmg').write_bytes(b'previous image')
             (output/'SHA256SUMS.txt').write_bytes(b'previous checksums')
             with mock.patch.object(builder.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'injected')):
                 with self.assertRaises(subprocess.CalledProcessError):
                     builder.build('arm64', output)
-            self.assertEqual((output/'old.pkg').read_bytes(), b'previous package')
+            self.assertEqual((output/'old.dmg').read_bytes(), b'previous image')
             self.assertEqual((output/'SHA256SUMS.txt').read_bytes(), b'previous checksums')
             self.assertFalse(list(Path(t).glob('.tapsay-package-*')))
 

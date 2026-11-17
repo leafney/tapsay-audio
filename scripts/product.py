@@ -50,10 +50,12 @@ def load_product(path=None):
     return data
 
 
-def render_uninstaller(destination, metadata, native, architecture):
+def render_uninstaller(destination, metadata, native, architecture, *, icon_path):
     if architecture not in ('arm64', 'x86_64'):
         raise ValueError('卸载工具架构无效：' + str(architecture))
-    destination, native = Path(destination), Path(native)
+    destination, native, icon_path = Path(destination), Path(native), Path(icon_path)
+    if not icon_path.is_file() or icon_path.read_bytes()[:4] != b'icns':
+        raise ValueError('卸载工具图标无效')
     shutil.copytree(ROOT / 'Uninstaller.app', destination)
     executable_directory = destination / 'Contents/MacOS'
     (executable_directory / 'TapSayAudioUninstaller').unlink(missing_ok=True)
@@ -62,14 +64,17 @@ def render_uninstaller(destination, metadata, native, architecture):
             stale.unlink()
     info_path = destination / 'Contents/Info.plist'
     info = plistlib.loads(info_path.read_bytes())
+    icon_name = icon_path.name
     info.update(CFBundleShortVersionString=metadata['product']['version'],
                 CFBundleVersion=metadata['product']['build_number'],
                 CFBundleIdentifier=metadata['uninstaller']['bundle_identifier'],
                 CFBundleExecutable='TapSayAudioUninstaller-' + architecture,
+                CFBundleIconFile=icon_name,
                 LSMinimumSystemVersion=metadata['product']['minimum_macos'])
     info_path.write_bytes(plistlib.dumps(info))
     resources = destination / 'Contents/Resources'
     resources.mkdir(exist_ok=True)
+    shutil.copy2(icon_path, resources / icon_name)
     (resources / 'product.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2)+'\n')
     for name, source in [
         ('TapSayAudioUninstaller-' + architecture, 'TapSayAudioUninstaller'),

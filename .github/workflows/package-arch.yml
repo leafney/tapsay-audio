@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate build inputs and runner
         env:
@@ -230,12 +230,11 @@ jobs:
             "$RUNNER_TEMP"/AuthKey_*.p8
 
       - name: Upload architecture artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: TapSayAudio-2ch-${{ inputs.version }}-${{ inputs.architecture }}-build-${{ inputs.build_number }}
           path: |
             ${{ runner.temp }}/tapsay-audio-artifact/*.dmg
-            ${{ runner.temp }}/tapsay-audio-artifact/*.pkg
             ${{ runner.temp }}/tapsay-audio-artifact/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

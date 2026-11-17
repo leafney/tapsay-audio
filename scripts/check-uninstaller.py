@@ -46,6 +46,11 @@ def main():
         raise ValueError('卸载构建号不一致')
     if info['LSMinimumSystemVersion'] != metadata['product']['minimum_macos']:
         raise ValueError('卸载工具最低系统不一致')
+    if info.get('CFBundleIconFile') != 'TapSayAudioUninstaller.icns':
+        raise ValueError('卸载工具图标声明不一致')
+    icon = app / 'Contents/Resources/TapSayAudioUninstaller.icns'
+    if not icon.is_file() or icon.read_bytes()[:4] != b'icns':
+        raise ValueError('卸载工具图标缺失或格式错误')
     packaged_metadata = json.loads((app / 'Contents/Resources/product.json').read_text())
     if packaged_metadata != metadata:
         raise ValueError('内置配置不一致')

@@ -27,7 +27,7 @@ workflow_dispatch
 双架构并行构建与校验
         ↓
 Actions Artifacts
-（DMG、PKG、架构校验文件）
+（DMG、架构校验文件）
 ```
 
 发布入口：
@@ -58,7 +58,7 @@ GitHub Pre-release
 1. 作为项目维护者，我希望手动运行工作流即可生成 arm64 内部测试包，以便在 Apple Silicon Mac 上验证安装和功能。
 2. 作为项目维护者，我希望手动运行工作流即可生成 x86_64 内部测试包，以便在 Intel Mac 上验证安装和功能。
 3. 作为项目维护者，我希望手动运行只上传 Actions Artifacts，以便测试未认证版本时不会误发布到 GitHub Releases。
-4. 作为项目维护者，我希望每个测试 Artifact 同时包含 DMG、PKG 和校验文件，以便分别检查用户下载入口和安装载荷。
+4. 作为项目维护者，我希望每个测试 Artifact 只包含 DMG 和校验文件，以便本地构建、内部测试和公开发布统一使用同一种交付格式。
 5. 作为项目维护者，我希望两个架构在独立原生 Runner 上构建，以便真实执行各自架构的原生工具与安装事务测试。
 6. 作为项目维护者，我希望 Tag `vX.Y.Z` 自动映射为产品版本 `X.Y.Z`，以便发布前不再手动提交版本修改。
 7. 作为项目维护者，我希望 Tag 与手动构建都自动使用 GitHub Actions 运行编号作为构建号，以便区分同一版本的重复构建。
@@ -71,7 +71,7 @@ GitHub Pre-release
 14. 作为项目维护者，我希望源码归档包含 Tag、源码提交和实际构建版本信息，以便二进制与对应源码可追溯。
 15. 作为项目维护者，我希望不限制 Tag 是否位于 `main` 历史，以便按当前发布习惯自由创建发布 Tag。
 16. 作为内部测试人员，我希望从 Actions 运行页面下载明确标注架构的 ZIP，以便选择正确机器测试。
-17. 作为内部测试人员，我希望能够验证 PKG 架构、DMG 完整性和散列，以便排除下载或构包损坏。
+17. 作为内部测试人员，我希望能够验证 DMG 完整性、散列以及内部 PKG 的架构，以便排除下载、构包或安装载荷损坏。
 18. 作为后续发布维护者，我希望正式 Tag 发布自动完成签名、公证、staple 和验证，以便日常发布只需要推送 Tag。
 
 ## Implementation Decisions
@@ -140,11 +140,12 @@ GitHub Pre-release
 
 ### 架构感知打包
 
-每个架构独立生成：
+每个架构独立发布：
 
-- `TapSayAudio-2ch-<版本>-<架构>.pkg`
 - `TapSayAudio-2ch-<版本>-<架构>.dmg`
 - 内部 Artifact 使用的 `SHA256SUMS.txt`
+
+`TapSayAudio-2ch-<版本>-<架构>.pkg` 只在临时工作目录生成并复制进 DMG，不作为独立产物发布。
 
 DMG 继续包含：
 
@@ -225,7 +226,7 @@ TapSayAudio-2ch-<版本>-source.tar.gz
 SHA256SUMS.txt
 ```
 
-不公开独立 PKG，不上传 `BUILD-RESULT.json`。
+不公开或单独上传 PKG，不上传 `BUILD-RESULT.json`。
 
 ### 失败语义
 
@@ -471,17 +472,16 @@ python3 scripts/check-uninstaller.py APP x86_64
 
 ### PKG 和 DMG 细节
 
-每次单架构打包必须创建独立临时目录，并在所有检查成功后原子发布。
+每次单架构打包必须创建独立临时目录，并在所有检查成功后原子发布 DMG。PKG 在该临时目录中生成和校验，只作为 DMG 的内部安装载荷。
 
 输出名称固定为：
 
 ```text
-TapSayAudio-2ch-<版本>-<架构>.pkg
 TapSayAudio-2ch-<版本>-<架构>.dmg
 SHA256SUMS.txt
 ```
 
-内部 Artifact 的 `SHA256SUMS.txt` 只列出该架构的 PKG 和 DMG。
+内部 Artifact 的 `SHA256SUMS.txt` 只列出该架构的 DMG。
 
 PKG 要求：
 
@@ -492,14 +492,16 @@ PKG 要求：
 - PKG 内的驱动和事务工具必须匹配目标架构。
 - Developer ID 模式必须使用 Developer ID Installer 证书重新签名 PKG。
 - 签名后使用 `pkgutil --check-signature` 验证。
+- PKG 不复制到单架构发布目录，也不进入 Actions Artifact 的顶层文件列表。
 
 DMG 要求：
 
 - 卷名包含目标架构。
 - 包含 PKG、对应架构卸载 APP、中文说明、GPL 和第三方许可说明。
 - 创建后使用 `hdiutil verify` 验证。
+- 挂载后必须对内部 PKG 执行架构、载荷、事务脚本和签名状态检查。
 - Developer ID 模式必须先签名 DMG，再公证和 staple。
-- 不将 PKG 作为公开 Release 独立资产。
+- 不将 PKG 作为本地输出、Actions Artifact 或公开 Release 的独立资产。
 
 ### 中文打包说明
 
@@ -526,9 +528,9 @@ python3 scripts/assemble-release.py \
 
 行为：
 
-1. 从两个输入目录寻找架构对应的 DMG 和 PKG。
+1. 从两个输入目录寻找架构对应的 DMG。
 2. 验证两个目录中的版本和架构一致。
-3. 分别执行 PKG 内容检查和 DMG 完整性检查。
+3. 分别执行 DMG 完整性检查，并通过挂载内容检查内部 PKG。
 4. 验证输入目录提供的单架构校验文件。
 5. 只复制两个 DMG 到公开输出目录。
 6. 生成一份源码归档。
@@ -585,7 +587,7 @@ python3 scripts/assemble-release.py \
 - 在临时配置中写入传入版本和构建号。
 - 调用统一构包脚本。
 - 在对应原生 Runner 上执行驱动、HAL、PKG 和隔离安装事务测试。
-- 上传一个架构的 DMG、PKG 和 `SHA256SUMS.txt`。
+- 上传一个架构的 DMG 和 `SHA256SUMS.txt`。
 - Artifact 名称包含版本、架构和运行编号。
 - Artifact 保留期为 14 天。
 - 签名模式为 `adhoc` 时不得访问开发者 Secrets。
@@ -660,7 +662,7 @@ Action 使用要求：
 7. 错误架构在 PKG 检查中失败。
 8. 错误架构在卸载 APP 检查中失败。
 9. 低于 macOS 14.0 的 Mach-O 被拒绝。
-10. 单架构 Artifact 校验文件只包含 DMG 与 PKG。
+10. 单架构 Artifact 校验文件只包含 DMG。
 11. 公开 Release 校验文件包含两个 DMG 与源码归档。
 12. 缺失任一架构产物时不生成公开目录。
 13. 错误散列阻止汇总发布。
@@ -707,7 +709,7 @@ bash scripts/build-packages.sh \
 
 检查：
 
-- 生成 arm64 PKG 与 DMG。
+- 只发布 arm64 DMG；PKG 仅存在于 DMG 内。
 - `lipo -archs` 全部为 arm64。
 - `vtool -show-build` 最低系统为 14.0。
 - `hdiutil verify` 通过。
@@ -719,7 +721,8 @@ bash scripts/build-packages.sh \
 
 - arm64 与 x86_64 两个任务均成功。
 - 两个 Artifact 都能下载。
-- 每个 Artifact 包含 DMG、PKG 和校验文件。
+- 每个 Artifact 只包含 DMG 和校验文件。
+- DMG 内部的 PKG 内容、架构和签名检查通过。
 - 两个架构的 Mach-O 没有混入。
 - 所有产物最低系统为 macOS 14.0。
 - GitHub Releases 没有任何新增内容。
@@ -759,7 +762,7 @@ bash scripts/build-packages.sh \
 - 不实现自动修改 Git Tag 或自动提交产品版本。
 - 不限制 Tag 来源分支。
 - 不在 GitHub Runner 上执行真实音频录音、遥控器连接或第三方输入法验收。
-- 不发布独立 PKG。
+- 不在本地输出目录、Actions Artifact 或公开 Release 中发布独立 PKG。
 - 不生成 GitHub Stable Release；Tag 发布统一为 Pre-release。
 - 不处理 Windows 或其他非 macOS 平台。
 

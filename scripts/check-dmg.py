@@ -28,6 +28,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('image', type=Path)
     parser.add_argument('architecture', choices=('arm64', 'x86_64'))
+    parser.add_argument(
+        '--signing-mode',
+        choices=('adhoc', 'developer-id'),
+        default='adhoc',
+    )
     args = parser.parse_args()
     image = args.image.resolve()
     architecture = args.architecture
@@ -61,10 +66,25 @@ def main():
                 '说明.txt': mountpoint / '说明.txt',
                 'GPL-3.0.txt': mountpoint / 'GPL-3.0.txt',
                 '第三方许可说明.md': mountpoint / '第三方许可说明.md',
+                '.VolumeIcon.icns': mountpoint / '.VolumeIcon.icns',
             }
             for name, path in required.items():
                 if not path.exists():
                     raise ValueError('DMG 缺少 ' + name)
+            subprocess.run([
+                'python3', str(ROOT / 'scripts/check-package.py'),
+                str(required[prefix + '.pkg']), architecture,
+                '--signing-mode', args.signing_mode,
+            ], check=True, cwd=ROOT)
+            if required['.VolumeIcon.icns'].read_bytes()[:4] != b'icns':
+                raise ValueError('DMG 卷图标格式错误')
+            attributes = subprocess.check_output(
+                ['/usr/bin/xcrun', 'GetFileInfo', '-a', str(mountpoint)],
+                text=True,
+                cwd=ROOT,
+            ).strip()
+            if 'C' not in attributes:
+                raise ValueError('DMG 卷未设置自定义图标')
             readme = required['说明.txt'].read_text()
             for placeholder in ('@VERSION@', '@ARCH@', '@PLATFORM@', '@SIGNING_STATUS@'):
                 if placeholder in readme:

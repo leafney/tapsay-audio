@@ -51,10 +51,10 @@ Tag 构建将 `--mode` 改为 `tag`，并传入 `--tag v0.2.0`。
 1. 校验 Runner 架构与目标架构一致。
 2. 写入本次构建号和有效版本。
 3. 运行配置、源码、驱动合同和安装事务测试。
-4. 构建驱动、原生工具、PKG、卸载 APP 和 DMG。
+4. 构建驱动、原生工具和临时 PKG，再生成包含 PKG 的 DMG 与卸载 APP。
 5. 使用 ad hoc 签名。
-6. 检查 PKG、DMG、卸载工具、Mach-O 架构和 macOS 14.0 最低系统。
-7. 上传该架构的 DMG、PKG 和单架构 `SHA256SUMS.txt`。
+6. 检查 DMG、内部 PKG、卸载工具、Mach-O 架构和 macOS 14.0 最低系统。
+7. 上传该架构的 DMG 和单架构 `SHA256SUMS.txt`。
 
 Artifact 名称格式：
 
@@ -137,7 +137,7 @@ TapSayAudio-2ch-<版本>-source.tar.gz
 SHA256SUMS.txt
 ```
 
-独立 PKG、构建记录和临时文件不会进入公开 Release。同名 Release 已存在时工作流失败，不覆盖原 Release。
+独立 PKG、构建记录和临时文件不会进入本地发布目录、Actions Artifact 或公开 Release。同名 Release 已存在时工作流失败，不覆盖原 Release。
 
 ## 本地验收命令
 
@@ -159,8 +159,8 @@ bash scripts/build-packages.sh \
 - arm64 驱动和四个原生工具：架构检查通过，最低系统均为 macOS 14.0。
 - HAL 合同：格式、插件属性和控制列表矩阵全部通过。
 - 隔离安装事务：安装、覆盖、故障恢复、卸载与结果协议全部通过。
-- PKG、DMG 与卸载 APP：内容和架构检查通过。
-- `/usr/bin/shasum -a 256 -c SHA256SUMS.txt`：PKG 与 DMG 均为 `OK`。
+- DMG 内部 PKG、DMG 与卸载 APP：内容和架构检查通过。
+- `/usr/bin/shasum -a 256 -c SHA256SUMS.txt`：DMG 为 `OK`。
 - 本地包为 ad hoc 内部测试包，不代表 Developer ID 签名或 Apple 公证已通过。
 
 arm64 实测散列：
@@ -174,3 +174,18 @@ fc268a262a83a3f2d3c3eec4c988c43c067580de219081f9899b7f2c77c4a320  TapSayAudio-2c
 - GitHub 手动双架构 Artifact：本轮未能执行。本地分支尚未推送，远端分支尚无 `.github/workflows/` 文件；本机 `gh` 也未登录。没有推送分支、合并默认分支或改用个人令牌绕过该限制。
 - 解锁条件：将本次工作流提交推送并合入允许显示 `workflow_dispatch` 的分支后，在 GitHub Actions 页面手动运行 `Build Internal Artifacts`，确认两个架构成功且没有新增 Release。
 - 正式 Tag 发布：证书配置完成前不执行。
+
+## 2026-11-17 统一 DMG 输出验证
+
+本地构包和 Actions Artifact 已统一为只发布 DMG，PKG 仅保留在 DMG 内。当前工作树完成 arm64 ad hoc 全链路验证：
+
+```text
+/private/tmp/tapsay-audio-dmg-only-arm64-test/SHA256SUMS.txt
+/private/tmp/tapsay-audio-dmg-only-arm64-test/TapSayAudio-2ch-0.1.1-arm64.dmg
+```
+
+输出目录没有独立 PKG。DMG 挂载后执行的内部 PKG、卸载 APP、卷图标和说明检查全部通过。DMG SHA-256：
+
+```text
+c156c9cc1728908ed61fd8bc9a3ae83938cc200e0e4e5a1cf9a40ca503a98a5e  TapSayAudio-2ch-0.1.1-arm64.dmg
+```

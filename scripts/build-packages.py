@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and verify the DMG and PKG for one native architecture."""
+"""Build a DMG for one native architecture with PKG kept as an internal file."""
 import argparse
 import fcntl
 import hashlib
@@ -134,6 +134,34 @@ def build(architecture, output, signing_mode='adhoc'):
             def run(args, extra=None, cwd=ROOT):
                 subprocess.run(args, check=True, cwd=cwd, env=dict(env, **(extra or {})))
 
+            def set_custom_icon(target, icon_source):
+                target, icon_source = Path(target), Path(icon_source)
+                donor = work / ('icon-donor-' + target.name + '.icns')
+                resources = work / ('icon-resources-' + target.name + '.rsrc')
+                shutil.copy2(icon_source, donor)
+                run(['/usr/bin/sips', '-i', str(donor)])
+                with resources.open('wb') as output:
+                    subprocess.run(
+                        ['/usr/bin/xcrun', 'DeRez', '-only', 'icns', str(donor)],
+                        check=True,
+                        stdout=output,
+                        cwd=ROOT,
+                        env=env,
+                    )
+                run([
+                    '/usr/bin/xcrun', 'Rez', '-append', str(resources),
+                    '-o', str(target),
+                ])
+                run(['/usr/bin/xcrun', 'SetFile', '-a', 'C', str(target)])
+                attributes = subprocess.check_output(
+                    ['/usr/bin/xcrun', 'GetFileInfo', '-a', str(target)],
+                    text=True,
+                    cwd=ROOT,
+                    env=env,
+                ).strip()
+                if 'C' not in attributes:
+                    raise ValueError('无法为产物设置自定义图标：' + str(target))
+
             run(['bash', 'scripts/build-native-tools.sh', '--arch', architecture])
             native = ROOT / '.build/native' / architecture
             for name in (
@@ -202,7 +230,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 shutil.copy2(ROOT / 'packaging/pkg-scripts' / name, scripts / name)
                 (scripts / name).chmod(0o755)
 
-            package = release / (prefix + '.pkg')
+            package = work / (prefix + '.pkg')
             run([
                 '/usr/bin/pkgbuild', '--root', str(empty), '--scripts', str(scripts),
                 '--identifier', metadata['driver']['package_receipt_identifier'],
@@ -210,20 +238,42 @@ def build(architecture, output, signing_mode='adhoc'):
                 metadata['product']['minimum_macos'], str(package),
             ])
             if signing_mode == 'developer-id':
-                signed_package = release / (prefix + '-signed.pkg')
+                signed_package = work / (prefix + '-signed.pkg')
                 run([
                     '/usr/bin/productsign', '--sign',
                     signing_environment['DEVELOPER_ID_INSTALLER_IDENTITY'],
                     str(package), str(signed_package),
                 ])
                 signed_package.replace(package)
+            icon_path = bundle / 'Contents/Resources/TapSayAudio.icns'
+            set_custom_icon(package, icon_path)
             run([
                 'python3', 'scripts/check-package.py', str(package), architecture,
                 '--signing-mode', signing_mode,
             ])
 
             app = image_root / (metadata['uninstaller']['display_name'] + '.app')
-            render_uninstaller(app, metadata, native, architecture)
+            icon_module_cache = work / 'icon-module-cache'
+            icon_module_cache.mkdir()
+            icon_builder = work / 'build-uninstaller-icon'
+            run([
+                '/usr/bin/xcrun', 'swiftc', '-O',
+                '-target', architecture + '-apple-macosx' + metadata['product']['minimum_macos'],
+                '-module-cache-path', str(icon_module_cache),
+                str(ROOT / 'Tools/BuildIcon.swift'), '-o', str(icon_builder),
+            ])
+            uninstaller_icon = work / 'TapSayAudioUninstaller.icns'
+            run([
+                str(icon_builder), str(work / 'TapSayAudioUninstaller.iconset'),
+                str(uninstaller_icon), 'uninstaller',
+            ])
+            render_uninstaller(
+                app,
+                metadata,
+                native,
+                architecture,
+                icon_path=uninstaller_icon,
+            )
             app_arguments = [
                 '/usr/bin/codesign', '--force', '--deep', '--options', 'runtime',
             ]
@@ -237,7 +287,9 @@ def build(architecture, output, signing_mode='adhoc'):
                 ])
             run([*app_arguments, str(app)])
             run(['python3', 'scripts/check-uninstaller.py', str(app), architecture])
-            shutil.copy2(package, image_root / package.name)
+            image_package = image_root / package.name
+            shutil.copy2(package, image_package)
+            set_custom_icon(image_package, icon_path)
 
             platform = 'Apple Silicon' if architecture == 'arm64' else 'Intel Mac'
             readme = (ROOT / 'packaging/dmg/README.txt').read_text()
@@ -250,13 +302,41 @@ def build(architecture, output, signing_mode='adhoc'):
             (image_root / '说明.txt').write_text(readme)
             shutil.copy2(ROOT / 'LICENSE', image_root / 'GPL-3.0.txt')
             shutil.copy2(ROOT / 'THIRD_PARTY_NOTICES.md', image_root / '第三方许可说明.md')
+            shutil.copy2(icon_path, image_root / '.VolumeIcon.icns')
             image = release / (prefix + '.dmg')
+            read_write_image = work / (prefix + '-read-write.dmg')
             run([
                 '/usr/bin/hdiutil', 'create',
-                '-volname', 'TapSay Audio ' + architecture,
-                '-srcfolder', str(image_root), '-format', 'UDZO', str(image),
+                '-volname', 'TapSay Audio ' + architecture, '-srcfolder', str(image_root),
+                '-format', 'UDRW', str(read_write_image),
             ])
-            run(['python3', 'scripts/check-dmg.py', str(image), architecture])
+            mountpoint = work / 'dmg-mount'
+            mountpoint.mkdir()
+            attached = False
+            try:
+                run([
+                    '/usr/bin/hdiutil', 'attach', '-readwrite', '-nobrowse',
+                    '-mountpoint', str(mountpoint), str(read_write_image),
+                ])
+                attached = True
+                run(['/usr/bin/xcrun', 'SetFile', '-a', 'C', str(mountpoint)])
+            finally:
+                if attached:
+                    subprocess.run(
+                        ['/usr/bin/hdiutil', 'detach', str(mountpoint)],
+                        check=False,
+                        cwd=ROOT,
+                        env=env,
+                    )
+            run([
+                '/usr/bin/hdiutil', 'convert', str(read_write_image),
+                '-format', 'UDZO', '-o', str(image),
+            ])
+            read_write_image.unlink()
+            run([
+                'python3', 'scripts/check-dmg.py', str(image), architecture,
+                '--signing-mode', signing_mode,
+            ])
             if signing_mode == 'developer-id':
                 run([
                     '/usr/bin/codesign', '--force', '--options', 'runtime',
@@ -273,7 +353,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 ])
                 run(['/usr/bin/codesign', '--verify', '--strict', str(image)])
 
-            assets = [package.name, image.name]
+            assets = [image.name]
             (release / 'SHA256SUMS.txt').write_text(''.join(
                 hashlib.sha256((release / name).read_bytes()).hexdigest() + '  ' + name + '\n'
                 for name in assets
