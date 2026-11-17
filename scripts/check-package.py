@@ -67,6 +67,15 @@ def main():
         executable = driver / "Contents/MacOS" / DRIVER["executable_name"]
         require("TapSayAudioProfile" not in info, "正式包不能含实验 profile")
         require(
+            info.get("CFBundleIconFile") == "TapSayAudio.icns",
+            "驱动图标声明不匹配",
+        )
+        icon = driver / "Contents/Resources/TapSayAudio.icns"
+        require(
+            icon.is_file() and icon.read_bytes()[:4] == b"icns",
+            "驱动图标缺失或格式错误",
+        )
+        require(
             DRIVER["plugin_factory_uuid"] in info["CFPlugInFactories"],
             "驱动插件工厂 UUID 不匹配",
         )

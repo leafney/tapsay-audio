@@ -103,6 +103,7 @@ esac
 xcrun swiftc -O -target "$host_arch-apple-macosx14.0" -module-cache-path "$work/module-cache" \
   "$root/Tools/BuildIcon.swift" -o "$work/build-icon"
 "$work/build-icon" "$work/TapSayAudio.iconset" "$output/Contents/Resources/TapSayAudio.icns"
+plutil -replace CFBundleIconFile -string TapSayAudio.icns "$output/Contents/Info.plist"
 if [[ "$signing_mode" == "adhoc" ]]; then
   codesign --force --deep --sign - --timestamp=none "$output"
 else
@@ -115,7 +116,9 @@ test "$(plutil -extract CFBundleIdentifier raw -o - "$plist")" = com.leafney.tap
 test "$(plutil -extract CFBundleName raw -o - "$plist")" = TapSayAudio
 test "$(plutil -extract CFBundleShortVersionString raw -o - "$plist")" = "$version"
 test "$(plutil -extract CFBundleVersion raw -o - "$plist")" = "$build_number"
+test "$(plutil -extract CFBundleIconFile raw -o - "$plist")" = TapSayAudio.icns
 test "$(plutil -extract CFPlugInFactories.CC1226D1-A123-47B7-B113-5228AB089AA8 raw -o - "$plist")" = TapSayAudio_Create
+test -s "$output/Contents/Resources/TapSayAudio.icns"
 read -r -a binary_architectures <<< "$(lipo -archs "$binary")"
 test "${#binary_architectures[@]}" = 1
 test "${binary_architectures[0]}" = "$arch"

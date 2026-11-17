@@ -37,7 +37,7 @@
 
 **问：** 是否接受分别生成 `TapSayAudio-arm64` 和 `TapSayAudio-x86_64` Artifact，每个包含对应架构的 DMG、PKG 和 `SHA256SUMS.txt`？
 
-**答：** 确认。
+**答：** 初期确认；后续统一为用户只下载 DMG，详见第 12 节。
 
 ### 3. 版本号来源
 
@@ -65,7 +65,7 @@
 
 **问：** DMG 和 PKG 是否有必要同时公开？
 
-**结论：** 公开 Release 只提供双架构 DMG、源码归档和 `SHA256SUMS.txt`。DMG 内部已经包含 PKG、卸载工具、说明和许可。内部 Actions Artifact 仍保留 DMG、PKG 和校验文件。
+**结论：** 公开 Release 只提供双架构 DMG、源码归档和 `SHA256SUMS.txt`。DMG 内部已经包含 PKG、卸载工具、说明和许可。后续内部 Actions Artifact 也统一为 DMG 和校验文件。
 
 **补充：** 用户进一步确认公开 Release 不提供 `BUILD-RESULT.json`。
 
@@ -108,12 +108,18 @@
 
 **结论：** 在 PRD 中增加独立的详细实施交接章节。章节中的明确约束优先于执行模型的自行推断。
 
+### 12. 手动构建输出范围
+
+**用户补充：** 手动编译也只保留 DMG 安装包，让本地构建、Actions Artifact 和公开 Release 统一为同一种交付格式。
+
+**最终结论：** 本地构包目录和 Actions Artifact 只保留 DMG 与 `SHA256SUMS.txt`。PKG 继续作为 DMG 内部的安装载荷生成，但不作为独立构建产物出现在目录、Artifact 或 Release 中。DMG 校验必须继续检查内部 PKG 的身份、架构、事务脚本和签名状态。
+
 ## 最终共识
 
 1. 手动工作流通过 `workflow_dispatch` 触发，只生成内部 Artifacts。
 2. arm64 和 x86_64 分别在原生 macOS Runner 上构建和验证。
 3. 所有架构的最低部署目标为 macOS 14.0。
-4. 手动 Artifact 包含对应架构的 DMG、PKG 和 `SHA256SUMS.txt`。
+4. 本地构建和手动 Artifact 包含对应架构的 DMG 和 `SHA256SUMS.txt`；PKG 只保存在 DMG 内。
 5. Tag 必须使用 `vX.Y.Z` 格式，产品版本从 Tag 自动获取。
 6. 构建号自动使用 GitHub Actions 运行编号。
 7. Tag 构建成功后创建 GitHub Pre-release。

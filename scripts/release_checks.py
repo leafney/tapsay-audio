@@ -111,10 +111,13 @@ def audit(directory, metadata, run=command, formal=False):
     ):
         image = directory / name
         if image.is_file():
-            result = run([
+            command = [
                 sys.executable, str(Path(__file__).with_name('check-dmg.py')),
                 str(image), architecture,
-            ])
+            ]
+            if formal:
+                command.extend(['--signing-mode', 'developer-id'])
+            result = run(command)
             if result.returncode != 0:
                 errors.append(name + ' 的内容或架构检查失败')
             if formal:

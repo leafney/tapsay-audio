@@ -29,7 +29,7 @@ def digest(path):
 def verify_single_architecture(directory, architecture, version):
     directory = Path(directory)
     prefix = f'TapSayAudio-2ch-{version}-{architecture}'
-    names = [prefix + '.pkg', prefix + '.dmg']
+    names = [prefix + '.dmg']
     for name in names:
         path = directory / name
         require(path.is_file() and path.stat().st_size > 0, '缺少非空资产：' + name)
@@ -47,13 +47,9 @@ def verify_single_architecture(directory, architecture, version):
     for name in names:
         require(checksums[name] == digest(directory / name), name + ' 散列不一致')
     subprocess.run([
-        'python3', str(ROOT / 'scripts/check-package.py'),
+        'python3', str(ROOT / 'scripts/check-dmg.py'),
         str(directory / names[0]), architecture,
         '--signing-mode', 'developer-id',
-    ], check=True, cwd=ROOT)
-    subprocess.run([
-        'python3', str(ROOT / 'scripts/check-dmg.py'),
-        str(directory / names[1]), architecture,
     ], check=True, cwd=ROOT)
 
 

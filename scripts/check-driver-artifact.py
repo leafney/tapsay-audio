@@ -15,8 +15,11 @@ def main():
     info=plistlib.loads((bundle/'Contents/Info.plist').read_bytes())
     for key,value in {'CFBundleIdentifier':d['bundle_identifier'],
         'CFBundleExecutable':d['executable_name'], 'CFBundleShortVersionString':p['version'],
-        'CFBundleVersion':p['build_number']}.items():
+        'CFBundleVersion':p['build_number'], 'CFBundleIconFile':'TapSayAudio.icns'}.items():
         if info[key]!=value: raise ValueError('产物元数据不一致：'+key)
+    icon=bundle/'Contents/Resources/TapSayAudio.icns'
+    if not icon.is_file() or icon.read_bytes()[:4] != b'icns':
+        raise ValueError('驱动图标缺失或格式错误')
     if info['CFPlugInFactories']!={d['plugin_factory_uuid']:'TapSayAudio_Create'}:
         raise ValueError('工厂入口不一致')
     binary=bundle/'Contents/MacOS'/d['executable_name']
