@@ -79,9 +79,10 @@ def audit(directory, metadata, run=command, formal=False, unverified=False):
     names = [
         prefix + '-arm64' + ('-Unverified' if unverified else '') + '.dmg',
         prefix + '-x86_64' + ('-Unverified' if unverified else '') + '.dmg',
-        prefix + '-source.tar.gz',
     ]
     errors, pending, rows = [], [], []
+    if {path.name for path in directory.iterdir()} != set(names) | {'SHA256SUMS.txt'}:
+        errors.append('公开资产集合错误')
     checksums = {}
     try:
         for line in (directory / 'SHA256SUMS.txt').read_text().splitlines():
@@ -135,9 +136,6 @@ def audit(directory, metadata, run=command, formal=False, unverified=False):
                         errors.append(name + ' 的签名、公证或系统策略检查失败')
                         break
 
-    source = directory / names[2]
-    if source.is_file():
-        check_source_archive(source, prefix, metadata, errors)
     if not formal:
         pending.append('签名、公证、staple 与系统策略检查尚未执行')
     return {

@@ -1,7 +1,10 @@
 """Create release notes from complete, locally available Git history."""
 from collections import deque
+import io
+import json
 import re
 import subprocess
+import tarfile
 
 TAG = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 
@@ -53,3 +56,23 @@ def release_notes(repo, tag, signing_mode):
     status = ('未经过苹果开发者签名及公证，macOS 可能阻止打开。'
               if signing_mode == 'adhoc' else '已通过开发者签名及苹果公证验证。')
     return status + '\n\n## 更新内容\n\n' + ('\n'.join('- ' + s for s in subjects) if subjects else '无普通提交。') + '\n'
+
+
+def verify_source_snapshot(repo, tag):
+    data = subprocess.run(['git', '-C', str(repo), 'archive', '--format=tar', tag],
+                          check=True, capture_output=True).stdout
+    required = {'LICENSE', 'THIRD_PARTY_NOTICES.md', 'config/product.json',
+                'third_party/blackhole/LICENSE', 'third_party/blackhole/SOURCE-SHA256.json',
+                'scripts/build-packages.py', 'scripts/build-driver.sh',
+                'scripts/prepare-driver-source.py', 'scripts/driver_sources.py',
+                'Tools/Transaction/main.swift'}
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
+        names = {entry.name for entry in archive if entry.isfile()}
+        manifest = 'third_party/blackhole/SOURCE-SHA256.json'
+        if manifest not in names:
+            raise ValueError('源码快照缺少上游散列清单')
+        inputs = json.load(archive.extractfile(manifest))
+        required.update('third_party/blackhole/' + name for name in inputs)
+        missing = required - names
+        if missing:
+            raise ValueError('源码快照缺少必要文件：' + ', '.join(sorted(missing)))

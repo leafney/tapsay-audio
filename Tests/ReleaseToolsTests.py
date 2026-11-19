@@ -75,7 +75,7 @@ class ReleaseToolsTests(unittest.TestCase):
             directory = Path(t)
             names = ('TapSayAudio-2ch-1.2.3-arm64-Unverified.dmg',
                      'TapSayAudio-2ch-1.2.3-x86_64-Unverified.dmg',
-                     'TapSayAudio-2ch-1.2.3-source.tar.gz', 'SHA256SUMS.txt')
+                     'SHA256SUMS.txt')
             for name in names:
                 (directory / name).write_bytes(b'x')
             paths, _ = publish_github_release.expected_assets('1.2.3', directory, 'adhoc')
@@ -97,12 +97,8 @@ class ReleaseToolsTests(unittest.TestCase):
                     hashlib.sha256(arch.encode()).hexdigest() + '  ' + name + '\n')
                 inputs.append(directory)
 
-            def source(directory, metadata):
-                (directory / f'TapSayAudio-2ch-{version}-source.tar.gz').write_bytes(b'source')
-
             result = {'content_errors': [], 'publication_pending': ['未公证'], 'assets': []}
             with mock.patch.object(assemble_release.subprocess, 'run') as run, \
-                    mock.patch.object(assemble_release, 'build_source_archive', side_effect=source), \
                     mock.patch.object(assemble_release, 'audit', return_value=result) as audit_mock:
                 assemble_release.assemble(*inputs, base / 'out', version, '14.0',
                                           formal=True, signing_mode='adhoc')
@@ -337,21 +333,13 @@ class ReleaseToolsTests(unittest.TestCase):
                     hashlib.sha256((directory / name).read_bytes()).hexdigest()
                     + '  ' + name + '\n' for name in names))
 
-            def make_source_archive(directory, build_metadata):
-                del build_metadata
-                (directory / f'TapSayAudio-2ch-{version}-source.tar.gz').write_bytes(b'source')
-
-            with mock.patch.object(assemble_release.subprocess, 'run'), \
-                    mock.patch.object(
-                        assemble_release, 'build_source_archive',
-                        side_effect=make_source_archive):
+            with mock.patch.object(assemble_release.subprocess, 'run'):
                 assemble_release.assemble(
                     arm64, x86_64, output, version, '14.0')
 
             public_names = {
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
                 f'TapSayAudio-2ch-{version}-x86_64.dmg',
-                f'TapSayAudio-2ch-{version}-source.tar.gz',
                 'SHA256SUMS.txt',
             }
             self.assertEqual({path.name for path in output.iterdir()}, public_names)
@@ -437,7 +425,7 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertNotIn('gh release create', release)
         self.assertEqual(release.count('actions/download-artifact@v8'), 2)
         self.assertIn('--draft', publisher)
-        self.assertIn('--prerelease', publisher)
+        self.assertNotIn('--prerelease', publisher)
         self.assertIn('--verify-tag', publisher)
         self.assertIn('signing_mode', shared)
         self.assertNotIn('BUILD-RESULT.json', release)
@@ -510,7 +498,6 @@ class ReleaseToolsTests(unittest.TestCase):
             names = [
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
                 f'TapSayAudio-2ch-{version}-x86_64.dmg',
-                f'TapSayAudio-2ch-{version}-source.tar.gz',
                 'SHA256SUMS.txt',
             ]
             for index, name in enumerate(names):
@@ -525,7 +512,7 @@ class ReleaseToolsTests(unittest.TestCase):
                 def state(self):
                     return json.dumps({
                         'isDraft': self.created and not self.published,
-                        'isPrerelease': self.published,
+                        'isPrerelease': False,
                         'name': 'TapSay Audio ' + version,
                         'assets': [
                             {'name': name, 'size': (directory / name).stat().st_size}
@@ -552,14 +539,16 @@ class ReleaseToolsTests(unittest.TestCase):
                     raise AssertionError('unexpected command: ' + ' '.join(args))
 
             runner = FakeGh()
-            publish_github_release.publish_release(
-                'v' + version, version, directory, runner)
+            with mock.patch.object(publish_github_release, 'release_notes', return_value='notes'), \
+                    mock.patch.object(publish_github_release, 'verify_source_snapshot'):
+                publish_github_release.publish_release(
+                    'v' + version, version, directory, runner)
             self.assertEqual(runner.calls[0][1:3], ['release', 'view'])
             create_call = next(call for call in runner.calls if call[1:3] == ['release', 'create'])
             self.assertIn('--draft', create_call)
             edit_call = next(call for call in runner.calls if call[1:3] == ['release', 'edit'])
             self.assertIn('--draft=false', edit_call)
-            self.assertIn('--prerelease', edit_call)
+            self.assertNotIn('--prerelease', edit_call)
 
     def test_github_release_upload_failure_removes_only_draft(self):
         with tempfile.TemporaryDirectory() as t:
@@ -568,7 +557,6 @@ class ReleaseToolsTests(unittest.TestCase):
             for name in (
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
                 f'TapSayAudio-2ch-{version}-x86_64.dmg',
-                f'TapSayAudio-2ch-{version}-source.tar.gz',
                 'SHA256SUMS.txt',
             ):
                 (directory / name).write_bytes(name.encode())
@@ -598,8 +586,10 @@ class ReleaseToolsTests(unittest.TestCase):
             runner = FailingGh()
             with self.assertRaisesRegex(
                     publish_github_release.ReleaseError, 'upload failed'):
-                publish_github_release.publish_release(
-                    'v' + version, version, directory, runner)
+                with mock.patch.object(publish_github_release, 'release_notes', return_value='notes'), \
+                        mock.patch.object(publish_github_release, 'verify_source_snapshot'):
+                    publish_github_release.publish_release(
+                        'v' + version, version, directory, runner)
             delete_call = next(call for call in runner.calls if call[1:3] == ['release', 'delete'])
             self.assertIn('--yes', delete_call)
             self.assertNotIn('--cleanup-tag', delete_call)
@@ -608,27 +598,11 @@ class ReleaseToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)
             metadata = load_product(); prefix = 'TapSayAudio-2ch-' + metadata['product']['version']
-            source_sha = subprocess.check_output(
-                ['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-            build_metadata = base / 'build-metadata.json'
-            build_metadata.write_text(json.dumps({
-                'version': metadata['product']['version'],
-                'build_number': metadata['product']['build_number'],
-                'tag': 'v' + metadata['product']['version'],
-                'source_sha': source_sha,
-            }))
-            subprocess.run(['bash', str(ROOT/'scripts/build-source-archive.sh')], check=True,
-                           env=dict(
-                               os.environ,
-                               OUT=t,
-                               TAPSAY_BUILD_METADATA=str(build_metadata),
-                           ), stdout=subprocess.DEVNULL)
             for suffix in ['-arm64.dmg', '-x86_64.dmg']:
                 (base / (prefix + suffix)).write_bytes(b'fixture')
             names = [
                 prefix + '-arm64.dmg',
                 prefix + '-x86_64.dmg',
-                prefix + '-source.tar.gz',
             ]
             sums = ''.join(hashlib.sha256((base/n).read_bytes()).hexdigest()+'  '+n+'\n' for n in names)
             (base / 'SHA256SUMS.txt').write_text(sums)
@@ -649,12 +623,8 @@ class ReleaseToolsTests(unittest.TestCase):
             (base/'SHA256SUMS.txt').unlink()
             self.assertEqual(exit_code(audit(base, metadata, ok)), 1)
             (base/'SHA256SUMS.txt').write_text(sums)
-            with tarfile.open(base/names[2], 'w:gz'): pass
-            (base/'SHA256SUMS.txt').write_text(''.join(
-                hashlib.sha256((base/n).read_bytes()).hexdigest()+'  '+n+'\n' for n in names))
-            result = audit(base, metadata, ok)
-            self.assertEqual(exit_code(result), 1)
-            self.assertTrue(any('源码归档缺少' in e for e in result['content_errors']))
+            (base/'extra').write_text('unexpected')
+            self.assertEqual(exit_code(audit(base, metadata, ok)), 1)
 
     def test_build_failure_preserves_existing_release(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build-packages.py')

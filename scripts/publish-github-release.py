@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from release_notes import release_notes, verify_source_snapshot
 
 VERSION_PATTERN = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 
@@ -57,7 +58,6 @@ def expected_assets(version, directory, signing_mode='developer-id'):
     names = [
         f'TapSayAudio-2ch-{version}-arm64{suffix}.dmg',
         f'TapSayAudio-2ch-{version}-x86_64{suffix}.dmg',
-        f'TapSayAudio-2ch-{version}-source.tar.gz',
         'SHA256SUMS.txt',
     ]
     actual = {
@@ -106,6 +106,8 @@ def publish_release(tag, version, directory, runner=None, signing_mode='develope
     paths, expected_sizes = expected_assets(version, directory, signing_mode)
     if release_state(tag, runner) is not None:
         raise ReleaseError('同名 Release 已存在')
+    notes = release_notes(Path(__file__).resolve().parents[1], tag, signing_mode)
+    verify_source_snapshot(Path(__file__).resolve().parents[1], tag)
 
     created_draft = False
     try:
@@ -114,9 +116,7 @@ def publish_release(tag, version, directory, runner=None, signing_mode='develope
             '--verify-tag',
             '--draft',
             '--title', 'TapSay Audio ' + version,
-            '--generate-notes',
-            '--notes', ('未经过苹果开发者签名及公证，macOS 可能阻止打开。'
-                        if signing_mode == 'adhoc' else '已通过开发者签名及苹果公证验证。'),
+            '--notes', notes,
         ], runner)
         require_success(created, '创建 Draft Release')
         created_draft = True
@@ -135,21 +135,20 @@ def publish_release(tag, version, directory, runner=None, signing_mode='develope
         published = run_gh([
             'release', 'edit', tag,
             '--draft=false',
-            '--prerelease',
         ], runner)
-        require_success(published, '发布 Pre-release')
+        require_success(published, '发布 Release')
 
         final_state = release_state(tag, runner)
         if final_state is None:
-            raise ReleaseError('发布后的 Pre-release 不存在')
+            raise ReleaseError('发布后的 Release 不存在')
         validate_remote_assets(final_state, expected_sizes, draft=False)
-        if final_state.get('isPrerelease') is not True:
-            raise ReleaseError('Release 未标记为 Pre-release')
+        if final_state.get('isPrerelease') is not False:
+            raise ReleaseError('Release 未标记为正式版本')
     except BaseException:
         if created_draft:
             cleanup_draft(tag, runner)
         raise
-    print('GitHub Pre-release 已发布：' + tag)
+    print('GitHub Release 已发布：' + tag)
 
 
 def main():
@@ -166,6 +165,6 @@ def main():
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
-    except (OSError, ReleaseError, ValueError) as error:
+    except (OSError, ReleaseError, ValueError, subprocess.CalledProcessError) as error:
         print('GitHub Release 发布失败：' + str(error), file=sys.stderr)
         raise SystemExit(1)

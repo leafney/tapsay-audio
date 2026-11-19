@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from release_notes import commit_subjects, release_notes
+from release_notes import commit_subjects, release_notes, verify_source_snapshot
 
 
 class ReleaseNotesTests(unittest.TestCase):
@@ -43,6 +43,8 @@ class ReleaseNotesTests(unittest.TestCase):
         self.git('tag', 'v9.0.0')
         self.git('checkout', '-q', '-')
         self.commit('主线')
+        self.git('tag', 'v1.0.2')
+        self.assertEqual(commit_subjects(self.repo, 'v1.0.2'), ['主线'])
         self.git('merge', '--no-ff', '-qm', '合并提交', 'other')
         self.git('tag', 'v1.1.0')
         self.assertEqual(commit_subjects(self.repo, 'v1.1.0'), ['主线'])
@@ -55,6 +57,17 @@ class ReleaseNotesTests(unittest.TestCase):
             commit_subjects(self.repo, 'v1.0.0')
         with self.assertRaises(subprocess.CalledProcessError):
             commit_subjects(self.repo, 'v2.0.0')
+
+    def test_shallow_and_missing_snapshot_files_fail(self):
+        (self.repo / 'README.md').write_text('test')
+        self.git('add', 'README.md')
+        self.commit('初始')
+        self.git('tag', 'v1.0.0')
+        with self.assertRaisesRegex(ValueError, '源码快照缺少'):
+            verify_source_snapshot(self.repo, 'v1.0.0')
+        (self.repo / '.git' / 'shallow').write_text(self.git('rev-parse', 'HEAD') + '\n')
+        with self.assertRaisesRegex(ValueError, '完整'):
+            commit_subjects(self.repo, 'v1.0.0')
 
 
 if __name__ == '__main__':

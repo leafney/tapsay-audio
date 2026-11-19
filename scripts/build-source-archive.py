@@ -51,7 +51,7 @@ def main():
         'build-source-archive.py', 'test-native-transaction.py', 'product.py', 'release_checks.py',
         'publish-artifacts.py', 'build-packages.py', 'driver_sources.py', 'run-driver-contract-tests.sh',
         'run-driver-contract-tests.py', 'test-hal-contract.sh', 'check-driver-artifact.py',
-        'publish-github-release.py', 'release-signing-mode.py']
+        'publish-github-release.py', 'release-signing-mode.py', 'release_notes.py']
     files.update(ROOT / 'scripts' / name for name in scripts)
     files.update((ROOT / '.github/workflows').glob('*.yml'))
     for path in files:

@@ -1,4 +1,4 @@
-name: Publish Pre-release
+name: Publish Release
 
 on:
   push:
@@ -93,6 +93,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Download arm64 artifact
         uses: actions/download-artifact@v8
@@ -133,7 +135,7 @@ jobs:
             --signing-mode "${{ needs.prepare.outputs.signing_mode }}" \
             --formal
 
-      - name: Publish GitHub Pre-release
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}

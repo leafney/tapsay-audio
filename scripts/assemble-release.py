@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import importlib.util
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -53,14 +52,6 @@ def verify_single_architecture(directory, architecture, version, signing_mode='d
     ], check=True, cwd=ROOT)
 
 
-def build_source_archive(output, build_metadata):
-    environment = dict(os.environ, OUT=str(output))
-    command = ['python3', str(ROOT / 'scripts/build-source-archive.py')]
-    if build_metadata is not None:
-        command.extend(['--build-metadata', str(build_metadata)])
-    subprocess.run(command, check=True, cwd=ROOT, env=environment)
-
-
 def write_checksums(directory, names):
     rows = []
     for name in names:
@@ -107,9 +98,6 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
             name = prefix + ('-Unverified' if signing_mode == 'adhoc' else '') + '.dmg'
             shutil.copy2(directory / (prefix + '.dmg'), staged / name)
             public_names.append(name)
-        build_source_archive(staged, build_metadata)
-        source_name = f'TapSayAudio-2ch-{version}-source.tar.gz'
-        public_names.append(source_name)
         write_checksums(staged, public_names)
         require({path.name for path in staged.iterdir()} == {
             *public_names, 'SHA256SUMS.txt',
