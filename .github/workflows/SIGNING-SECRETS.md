@@ -2,7 +2,7 @@
 
 本文用于配置 [package-arch.yml](package-arch.yml) 中的 Developer ID 签名与 Apple 公证流程，供后续正式 Tag 发布使用。
 
-当前手动构建固定使用 ad hoc 签名，不读取本文中的 Secrets。只有 Tag 发布工作流固定使用 `developer-id` 模式，并会一次性要求以下 8 个 Secrets。缺少任意一项时，工作流会在 `Validate Developer ID secrets` 步骤直接失败，不会降级发布未认证包。
+手动构建固定使用 ad hoc 签名，仅生成 Actions Artifact，不读取本文中的 Secrets。Tag 发布时，以下 8 项全部为空则发布名称带 `Unverified` 的未认证包；全部填写则进行 Developer ID 签名和公证；部分填写则终止。凭据无效或公证失败时不会降级。补齐凭据后请使用新版本 Tag 发布认证包，已有 Release 不会被覆盖。
 
 ## 1. 所需 Secrets 总览
 
@@ -342,7 +342,7 @@ Tag 发布时，工作流按以下顺序使用 Secrets：
 
 | 阶段 | 使用的 Secrets | 作用 |
 | --- | --- | --- |
-| 完整性校验 | 全部 8 项 | 任一项为空时立即失败 |
+| 完整性校验 | 全部 8 项 | 全空发布未认证包；部分填写失败；全部填写进入认证流程 |
 | 导入证书 | 两个 P12、两个 P12 密码 | 创建临时 Keychain 并导入签名身份 |
 | 识别签名身份 | `APPLE_TEAM_ID` | 选择 Team ID 匹配的 Application 与 Installer 身份 |
 | 准备公证密钥 | Key ID、`.p8` Base64 | 写入 Runner 临时目录 |
@@ -399,7 +399,7 @@ v0.2.0
 - 两个架构所需 Secrets 均已在仓库级配置。
 - 当前 Apple 证书未过期或被撤销。
 
-工作流会先完成两个架构的签名和公证，再执行最终 DMG 复验并创建 Pre-release。任一架构失败时不会创建 Release。
+全部凭据填写后，工作流会先完成两个架构的签名和公证，再执行最终 DMG 复验并创建 Pre-release。任一架构失败时不会创建 Release。全部凭据为空时会发布未认证包，macOS 可能阻止打开。
 
 ## 13. 常见错误与排查
 

@@ -45,6 +45,64 @@ build_packages_spec.loader.exec_module(build_packages)
 
 
 class ReleaseToolsTests(unittest.TestCase):
+    def test_signing_mode_requires_all_or_no_credentials(self):
+        spec = importlib.util.spec_from_file_location('signing_mode', ROOT / 'scripts/release-signing-mode.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.select({}), 'adhoc')
+        self.assertEqual(module.select(dict.fromkeys(module.NAMES, '  ')), 'adhoc')
+        self.assertEqual(module.select(dict.fromkeys(module.NAMES, 'secret')), 'developer-id')
+        for name in module.NAMES:
+            with self.assertRaises(ValueError):
+                module.select({name: 'secret'})
+            almost = dict.fromkeys(module.NAMES, 'secret')
+            almost[name] = ' '
+            with self.assertRaises(ValueError):
+                module.select(almost)
+
+    def test_unverified_release_asset_names(self):
+        with tempfile.TemporaryDirectory() as t:
+            directory = Path(t)
+            names = ('TapSayAudio-2ch-1.2.3-arm64-Unverified.dmg',
+                     'TapSayAudio-2ch-1.2.3-x86_64-Unverified.dmg',
+                     'TapSayAudio-2ch-1.2.3-source.tar.gz', 'SHA256SUMS.txt')
+            for name in names:
+                (directory / name).write_bytes(b'x')
+            paths, _ = publish_github_release.expected_assets('1.2.3', directory, 'adhoc')
+            self.assertEqual({p.name for p in paths}, set(names))
+            with self.assertRaises(publish_github_release.ReleaseError):
+                publish_github_release.expected_assets('1.2.3', directory, 'developer-id')
+
+    def test_unverified_assembly_checks_and_renames_both_architectures(self):
+        with tempfile.TemporaryDirectory() as t:
+            base = Path(t)
+            version = load_product()['product']['version']
+            inputs = []
+            for arch in ('arm64', 'x86_64'):
+                directory = base / arch
+                directory.mkdir()
+                name = f'TapSayAudio-2ch-{version}-{arch}.dmg'
+                (directory / name).write_bytes(arch.encode())
+                (directory / 'SHA256SUMS.txt').write_text(
+                    hashlib.sha256(arch.encode()).hexdigest() + '  ' + name + '\n')
+                inputs.append(directory)
+
+            def source(directory, metadata):
+                (directory / f'TapSayAudio-2ch-{version}-source.tar.gz').write_bytes(b'source')
+
+            result = {'content_errors': [], 'publication_pending': ['未公证'], 'assets': []}
+            with mock.patch.object(assemble_release.subprocess, 'run') as run, \
+                    mock.patch.object(assemble_release, 'build_source_archive', side_effect=source), \
+                    mock.patch.object(assemble_release, 'audit', return_value=result) as audit_mock:
+                assemble_release.assemble(*inputs, base / 'out', version, '14.0',
+                                          formal=True, signing_mode='adhoc')
+            self.assertEqual(run.call_count, 2)
+            self.assertTrue(all('adhoc' in call.args[0] for call in run.call_args_list))
+            self.assertTrue(audit_mock.call_args.kwargs['unverified'])
+            names = {path.name for path in (base / 'out').iterdir()}
+            self.assertIn(f'TapSayAudio-2ch-{version}-arm64-Unverified.dmg', names)
+            self.assertIn(f'TapSayAudio-2ch-{version}-x86_64-Unverified.dmg', names)
+
     def test_version_and_rendering(self):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)
@@ -217,7 +275,9 @@ class ReleaseToolsTests(unittest.TestCase):
             base = Path(t)
             config = base / 'product.json'
             output = base / 'build-metadata.json'
-            config.write_bytes((ROOT / 'config/product.json').read_bytes())
+            metadata = load_product()
+            metadata['upstream']['source_import_status'] = 'integrated from fixed upstream commit; final distribution review pending'
+            config.write_text(json.dumps(metadata))
             original = config.read_bytes()
             result = subprocess.run([
                 sys.executable,
@@ -361,7 +421,7 @@ class ReleaseToolsTests(unittest.TestCase):
         self.assertIn('v*', release)
         self.assertNotIn('workflow_dispatch:', release)
         self.assertNotIn('pull_request:', release)
-        self.assertEqual(release.count('signing_mode: developer-id'), 2)
+        self.assertEqual(release.count('signing_mode: ${{ needs.prepare.outputs.signing_mode }}'), 2)
         self.assertIn('--formal', release)
         self.assertIn('publish-github-release.py', release)
         self.assertNotIn('gh release create', release)
