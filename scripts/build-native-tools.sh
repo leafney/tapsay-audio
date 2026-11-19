@@ -25,6 +25,7 @@ case "$ARCH" in
         exit 2
         ;;
 esac
+minimum="$(PYTHONPATH="$ROOT/scripts" python3 -c 'import sys; from product import load_product, minimum_macos; print(minimum_macos(load_product(), sys.argv[1]))' "$ARCH")"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 OUTPUT="$ROOT/.build/native/$ARCH"
 MODULE_CACHE="$ROOT/.build/native/module-cache/$ARCH"
@@ -40,13 +41,13 @@ check_binary() {
         echo "原生工具架构不匹配：$binary（期望 $ARCH，实际 $architecture_output）" >&2
         exit 1
     fi
-    if ! xcrun vtool -show-build "$binary" | grep -Fq 'minos 14.0'; then
-        echo "原生工具最低系统不是 macOS 14.0：$binary" >&2
+    if ! xcrun vtool -show-build "$binary" | grep -Fq "minos $minimum"; then
+        echo "原生工具最低系统不是 macOS $minimum：$binary" >&2
         exit 1
     fi
 }
 
-xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
+xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx$minimum" \
         -module-cache-path "$MODULE_CACHE" \
         "$ROOT/Tools/Transaction/Architecture.swift" \
         "$ROOT/Tools/Transaction/TransactionSupport.swift" \
@@ -58,7 +59,7 @@ xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
         "$ROOT/Tools/Transaction/main.swift" \
         -framework CoreAudio \
         -o "$OUTPUT/TapSayAudioTransaction"
-xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
+xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx$minimum" \
         -module-cache-path "$MODULE_CACHE" \
         "$ROOT/Tools/Transaction/Architecture.swift" \
         "$ROOT/Tools/Transaction/TransactionSupport.swift" \
@@ -67,12 +68,12 @@ xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
         "$ROOT/Tools/Transaction/Uninstaller.swift" \
         -framework AppKit -framework Security \
         -o "$OUTPUT/TapSayAudioUninstaller"
-xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
+xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx$minimum" \
         -module-cache-path "$MODULE_CACHE" \
         "$ROOT/Tools/Transaction/Diagnose.swift" \
         -framework CoreAudio \
         -o "$OUTPUT/TapSayAudioDiagnose"
-xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx14.0" \
+xcrun swiftc -O -sdk "$SDK" -target "$ARCH-apple-macosx$minimum" \
         -module-cache-path "$MODULE_CACHE" \
         "$ROOT/Tools/Transaction/Loopback.swift" \
         -framework AudioToolbox -framework CoreAudio \

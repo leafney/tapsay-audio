@@ -129,7 +129,6 @@ jobs:
             --x86_64-dir "$RUNNER_TEMP/release-input/x86_64" \
             --output "$RUNNER_TEMP/public-release" \
             --version "$RELEASE_VERSION" \
-            --minimum-macos 14.0 \
             --build-metadata .build/build-metadata.json \
             --signing-mode "${{ needs.prepare.outputs.signing_mode }}" \
             --formal

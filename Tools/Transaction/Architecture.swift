@@ -1,6 +1,13 @@
 import Darwin
 import Foundation
 
+func supportsSystem(architecture: String, majorVersion: Int, versions: [String: String]) -> Bool {
+    guard versions == ["arm64": "14.0", "x86_64": "13.0"],
+          let minimum = versions[architecture],
+          let major = Int(minimum.split(separator: ".")[0]) else { return false }
+    return majorVersion >= major
+}
+
 func hostArchitecture() -> String {
     var arm: Int32 = 0
     var count = MemoryLayout<Int32>.size

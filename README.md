@@ -35,7 +35,7 @@ TapSay Audio 可独立安装和卸载，也能与 `MiRemoteV 2ch`、`BlackHole 2
 
 | 项目 | 支持情况 |
 | --- | --- |
-| 操作系统 | macOS 14 及以上 |
+| 操作系统 | Apple Silicon：macOS 14 及以上；Intel：macOS 13 及以上（macOS 13 真机待验证） |
 | Apple Silicon | 提供 arm64 安装包 |
 | Intel | 提供 x86_64 安装包 |
 | 签名与公证 | 后续正式发布将完成 Apple Developer ID 签名与公证 |

@@ -4,7 +4,7 @@ import plistlib
 import subprocess
 import sys
 from pathlib import Path
-from product import load_product
+from product import load_product, minimum_macos
 
 def main():
     valid_architectures = ('arm64', 'x86_64')
@@ -28,7 +28,7 @@ def main():
     if actual_architectures != [expected_architecture]:
         raise ValueError('产物架构不是 '+expected_architecture)
     settings=subprocess.check_output(['xcrun','vtool','-show-build',str(binary)],text=True)
-    if 'minos '+p['minimum_macos'] not in settings: raise ValueError('最低系统不一致')
+    if 'minos '+minimum_macos(m, expected_architecture) not in settings: raise ValueError('最低系统不一致')
     strings=subprocess.check_output(['strings',str(binary)],text=True)
     for value in [d['device_uid'],d['device_name'],d['box_uid'],d['model_uid'],*d['hidden_device_uids']]:
         if value not in strings: raise ValueError('产物身份缺失：'+value)

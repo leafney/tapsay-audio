@@ -9,6 +9,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from product import minimum_macos
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +32,7 @@ def main():
     args = parser.parse_args()
     pkg = args.pkg.resolve()
     expected_arch = args.architecture
+    minimum = minimum_macos(METADATA, expected_arch)
     require(pkg.is_file(), f"PKG 不存在：{pkg}")
 
     with tempfile.TemporaryDirectory() as directory:
@@ -51,7 +53,7 @@ def main():
             "PKG 版本不匹配",
         )
         require(
-            f'minimumSystemVersion="{PRODUCT["minimum_macos"]}"' in package_info,
+            f'minimumSystemVersion="{minimum}"' in package_info,
             "PKG 最低系统不匹配",
         )
 
@@ -88,7 +90,7 @@ def main():
             text=True,
         )
         require(
-            f"minos {PRODUCT['minimum_macos']}" in minimum_system,
+            f"minos {minimum}" in minimum_system,
             "PKG 驱动最低系统不匹配",
         )
         strings = subprocess.check_output(["/usr/bin/strings", str(executable)], text=True)
@@ -150,7 +152,7 @@ def main():
             text=True,
         )
         require(
-            f"minos {PRODUCT['minimum_macos']}" in transaction_system,
+            f"minos {minimum}" in transaction_system,
             "PKG 事务工具最低系统不匹配",
         )
         transaction_source = (ROOT / "Tools/Transaction/main.swift").read_text(encoding="utf-8")

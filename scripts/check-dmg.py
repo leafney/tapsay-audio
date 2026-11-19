@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 
-from product import ROOT, load_product
+from product import ROOT, load_product, minimum_macos
 
 
 def verify_image(image):
@@ -89,10 +89,10 @@ def main():
             if 'C' not in attributes:
                 raise ValueError('DMG 卷未设置自定义图标')
             readme = required['说明.txt'].read_text()
-            for placeholder in ('@VERSION@', '@ARCH@', '@PLATFORM@', '@SIGNING_STATUS@'):
+            for placeholder in ('@VERSION@', '@ARCH@', '@PLATFORM@', '@SIGNING_STATUS@', '@MINIMUM_MACOS@', '@COMPATIBILITY_STATUS@'):
                 if placeholder in readme:
                     raise ValueError('DMG 说明仍含占位符：' + placeholder)
-            if platform not in readme or architecture not in readme:
+            if platform not in readme or architecture not in readme or ('macOS ' + minimum_macos(metadata, architecture)) not in readme:
                 raise ValueError('DMG 说明中的平台与架构不匹配')
             subprocess.run([
                 'python3', str(ROOT / 'scripts/check-uninstaller.py'),

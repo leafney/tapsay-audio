@@ -16,7 +16,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from product import load_product, render_uninstaller
+from product import load_product, render_uninstaller, minimum_macos
 from release_checks import audit, exit_code
 
 spec = importlib.util.spec_from_file_location('publisher', ROOT / 'scripts/publish-artifacts.py')
@@ -45,6 +45,16 @@ build_packages_spec.loader.exec_module(build_packages)
 
 
 class ReleaseToolsTests(unittest.TestCase):
+    def test_minimum_system_versions_by_architecture(self):
+        metadata = load_product()
+        self.assertEqual(minimum_macos(metadata, 'arm64'), '14.0')
+        self.assertEqual(minimum_macos(metadata, 'x86_64'), '13.0')
+        with self.assertRaises(ValueError):
+            minimum_macos(metadata, 'unknown')
+        metadata['product']['minimum_macos_by_architecture'].pop('arm64')
+        with self.assertRaises(ValueError):
+            minimum_macos(metadata, 'x86_64')
+
     def test_signing_mode_requires_all_or_no_credentials(self):
         spec = importlib.util.spec_from_file_location('signing_mode', ROOT / 'scripts/release-signing-mode.py')
         module = importlib.util.module_from_spec(spec)

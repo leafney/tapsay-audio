@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import tempfile
 
-from product import ROOT, load_product, render_uninstaller
+from product import ROOT, load_product, render_uninstaller, minimum_macos
 
 ARCHITECTURES = ('arm64', 'x86_64')
 DEVELOPER_ID_ENVIRONMENT = (
@@ -202,7 +202,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 'architecture': architecture,
                 'version': metadata['product']['version'],
                 'build_number': metadata['product']['build_number'],
-                'minimum_macos': metadata['product']['minimum_macos'],
+                'minimum_macos': minimum_macos(metadata, architecture),
                 'signing_mode': signing_mode,
             }
             for key, value in expected_result.items():
@@ -235,7 +235,7 @@ def build(architecture, output, signing_mode='adhoc'):
                 '/usr/bin/pkgbuild', '--root', str(empty), '--scripts', str(scripts),
                 '--identifier', metadata['driver']['package_receipt_identifier'],
                 '--version', version, '--install-location', '/', '--min-os-version',
-                metadata['product']['minimum_macos'], str(package),
+                minimum_macos(metadata, architecture), str(package),
             ])
             if signing_mode == 'developer-id':
                 signed_package = work / (prefix + '-signed.pkg')
@@ -258,7 +258,7 @@ def build(architecture, output, signing_mode='adhoc'):
             icon_builder = work / 'build-uninstaller-icon'
             run([
                 '/usr/bin/xcrun', 'swiftc', '-O',
-                '-target', architecture + '-apple-macosx' + metadata['product']['minimum_macos'],
+                '-target', architecture + '-apple-macosx' + minimum_macos(metadata, architecture),
                 '-module-cache-path', str(icon_module_cache),
                 str(ROOT / 'Tools/BuildIcon.swift'), '-o', str(icon_builder),
             ])
@@ -297,6 +297,8 @@ def build(architecture, output, signing_mode='adhoc'):
                       .replace('@VERSION@', version)
                       .replace('@PLATFORM@', platform)
                       .replace('@ARCH@', architecture)
+                      .replace('@MINIMUM_MACOS@', minimum_macos(metadata, architecture))
+                      .replace('@COMPATIBILITY_STATUS@', 'macOS 13 真机兼容性待验证。' if architecture == 'x86_64' else '')
                       .replace('@SIGNING_STATUS@',
                                signing_status(signing_mode, architecture)))
             (image_root / '说明.txt').write_text(readme)

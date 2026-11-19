@@ -88,8 +88,6 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
     require(re.fullmatch(VERSION_PATTERN, version) is not None, '版本格式无效')
     metadata = load_product()
     require(metadata['product']['version'] == version, '产品配置版本与发布版本不一致')
-    require(metadata['product']['minimum_macos'] == minimum_macos,
-            '最低系统参数与产品配置不一致')
     arm64_dir = Path(arm64_dir).absolute()
     x86_64_dir = Path(x86_64_dir).absolute()
     verify_single_architecture(arm64_dir, 'arm64', version, signing_mode)
@@ -139,7 +137,7 @@ def main():
     parser.add_argument('--x86_64-dir', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--version', required=True)
-    parser.add_argument('--minimum-macos', required=True)
+    parser.add_argument('--minimum-macos', help='已弃用，版本按架构从配置读取')
     parser.add_argument('--build-metadata', type=Path)
     parser.add_argument('--formal', action='store_true')
     parser.add_argument('--signing-mode', choices=('adhoc', 'developer-id'), default='developer-id')

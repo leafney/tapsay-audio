@@ -68,7 +68,14 @@ struct Transaction {
             try require(testRoot.path.hasPrefix(temporary) || testRoot.path.hasPrefix("/private/tmp/"), "测试仅允许专用临时目录")
         } else {
             try require(geteuid() == 0, "需要系统管理员授权")
-            try require(ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 14, "最低支持 macOS 14")
+            let architecture = hostArchitecture()
+            guard let versions = p["minimum_macos_by_architecture"] as? [String: String],
+                  let minimum = versions[architecture] else {
+                throw Failure("不支持的架构或最低系统配置")
+            }
+            try require(supportsSystem(architecture: architecture,
+                                       majorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+                                       versions: versions), "系统版本或配置不受支持，最低要求 macOS \(minimum)")
         }
         target = (testRoot ?? URL(fileURLWithPath: "/")).appendingPathComponent("Library/Audio/Plug-Ins/HAL/TapSayAudio.driver")
         state = (testRoot ?? URL(fileURLWithPath: "/")).appendingPathComponent("Library/Application Support/TapSay Audio/install-state.json")

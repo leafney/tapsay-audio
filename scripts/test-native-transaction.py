@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "config/product.json"
 META = json.loads(META_PATH.read_text(encoding="utf-8"))
+from product import minimum_macos
 parser = argparse.ArgumentParser()
 parser.add_argument('--build-result', type=Path, required=True)
 options = parser.parse_args()
@@ -53,9 +54,17 @@ def assert_no_transaction_material(root, target):
 
 def main():
     assert TOOL.is_file() and DRIVER.is_dir(), "先构建驱动和原生工具"
+    system_test = ROOT / f".build/native/{ARCH}/SystemVersionTests"
+    subprocess.run([
+        "xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx{minimum_macos(META, ARCH)}",
+        "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
+        str(ROOT / "Tools/Transaction/Architecture.swift"),
+        str(ROOT / "Tests/SystemVersionTests.swift"), "-o", str(system_test),
+    ], check=True)
+    subprocess.run([str(system_test)], check=True)
     protocol_test = ROOT / f".build/native/{ARCH}/UninstallResultTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx{minimum_macos(META, ARCH)}",
          "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/UninstallResult.swift"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
@@ -67,7 +76,7 @@ def main():
     subprocess.run([str(protocol_test)], check=True)
     transaction_test = ROOT / f".build/native/{ARCH}/TransactionRecordTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx{minimum_macos(META, ARCH)}",
          "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/TransactionRecord.swift"),
@@ -77,7 +86,7 @@ def main():
     subprocess.run([str(transaction_test)], check=True)
     history_test = ROOT / f".build/native/{ARCH}/HistoricalCleanupTests"
     subprocess.run(
-        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx14.0",
+        ["xcrun", "swiftc", "-target", f"{ARCH}-apple-macosx{minimum_macos(META, ARCH)}",
          "-module-cache-path", str(ROOT / f".build/native/module-cache/{ARCH}"),
          str(ROOT / "Tools/Transaction/TransactionSupport.swift"),
          str(ROOT / "Tools/Transaction/HistoricalCleanup.swift"),

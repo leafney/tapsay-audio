@@ -16,7 +16,8 @@ TapSay Audio 2ch
 工具不会自动重启系统。
 
 支持范围
-- macOS 14 及以上。
+- macOS @MINIMUM_MACOS@ 及以上。
+- @COMPATIBILITY_STATUS@
 - 本 DMG 只适用于 @PLATFORM@（@ARCH@）。
 - 固定双声道。
 - 默认采样率 48 kHz；遥控器源仍为 16 kHz 单声道，驱动不因此限制为 16 kHz。

@@ -17,7 +17,7 @@ def main():
     lines = ['# 本地发行检查', '', state, '', '## 内容错误', '']
     lines += ['- '+e for e in result['content_errors']] or ['无']
     lines += ['', '## 正式发布条件', ''] + ['- '+e for e in result['publication_pending']]
-    lines += ['', '支持范围：Apple Silicon arm64 与 Intel x86_64；macOS 14 及以上。', '']
+    lines += ['', '支持范围：Apple Silicon arm64 为 macOS 14 及以上；Intel x86_64 为 macOS 13 及以上（macOS 13 真机待验证）。', '']
     (args.dist / 'RELEASE-READINESS.md').write_text('\n'.join(lines))
     (args.dist / 'RELEASE-STATUS.json').write_text(json.dumps(result, ensure_ascii=False, indent=2)+'\n')
     print('\n'.join(lines))

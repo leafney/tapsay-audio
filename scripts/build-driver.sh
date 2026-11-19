@@ -55,6 +55,7 @@ if [[ "$signing_mode" == "developer-id" && -z "$application_identity" ]]; then
   echo "Developer ID 模式缺少应用签名身份" >&2
   exit 2
 fi
+minimum="$(PYTHONPATH="$root/scripts" python3 -c 'import sys; from product import load_product, minimum_macos; print(minimum_macos(load_product(), sys.argv[1]))' "$arch")"
 export LC_ALL=C
 python3 "$root/scripts/check-metadata.py"
 
@@ -74,7 +75,7 @@ grep -Fq 'gDevice_SampleRate                  = 48000.0' "$source/BlackHole/Blac
 grep -Fq 'kAudioDeviceTransportTypeUSB' "$source/BlackHole/BlackHole.c"
 
 settings=(
-  "ARCHS=$arch" ONLY_ACTIVE_ARCH=NO MACOSX_DEPLOYMENT_TARGET=14.0
+  "ARCHS=$arch" ONLY_ACTIVE_ARCH=NO "MACOSX_DEPLOYMENT_TARGET=$minimum"
   CODE_SIGNING_ALLOWED=NO PRODUCT_NAME=TapSayAudio
   PRODUCT_BUNDLE_IDENTIFIER=com.leafney.tapsay.audio.driver
   "MARKETING_VERSION=$version" "CURRENT_PROJECT_VERSION=$build_number"
@@ -122,22 +123,22 @@ test -s "$output/Contents/Resources/TapSayAudio.icns"
 read -r -a binary_architectures <<< "$(lipo -archs "$binary")"
 test "${#binary_architectures[@]}" = 1
 test "${binary_architectures[0]}" = "$arch"
-xcrun vtool -show-build "$binary" | grep -Fq 'minos 14.0'
+xcrun vtool -show-build "$binary" | grep -Fq "minos $minimum"
 codesign --verify --deep --strict "$output"
 strings "$binary" | grep -Fxq 'TapSay Audio 2ch'
 shasum -a 256 "$binary" > "$work/binary.sha256"
 python3 - "$output" "$source" \
   "${TAPSAY_BUILD_RESULT:-$root/.build/latest-driver-$arch.json}" \
-  "$root" "$arch" "$version" "$build_number" "$signing_mode" <<'PY'
+  "$root" "$arch" "$version" "$build_number" "$signing_mode" "$minimum" <<'PY'
 import hashlib, json, pathlib, sys
 bundle, source, result, root = map(pathlib.Path, sys.argv[1:5])
-architecture, version, build_number, signing_mode = sys.argv[5:]
+architecture, version, build_number, signing_mode, minimum = sys.argv[5:]
 sys.path.insert(0, str(root / 'scripts'))
 from driver_sources import PATCHES, verify_inputs
 hashes = verify_inputs()
 binary = bundle / 'Contents/MacOS/TapSayAudio'
 data = {'bundle': str(bundle), 'source': str(source), 'architecture': architecture,
-        'version': version, 'build_number': build_number, 'minimum_macos': '14.0',
+        'version': version, 'build_number': build_number, 'minimum_macos': minimum,
         'signing_mode': signing_mode,
         'driver_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
         'driver_mode': 'reference-with-property-fixes',

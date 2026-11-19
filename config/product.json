@@ -5,7 +5,7 @@
     "repository": "tapsay-audio",
     "version": "0.1.1",
     "build_number": "2",
-    "minimum_macos": "14.0",
+    "minimum_macos_by_architecture": {"arm64": "14.0", "x86_64": "13.0"},
     "architectures": ["arm64", "x86_64"]
   },
   "driver": {

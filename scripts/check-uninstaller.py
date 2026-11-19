@@ -6,7 +6,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 
-from product import load_product
+from product import load_product, minimum_macos
 
 MACHO_MAGICS = {
     b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf',
@@ -44,7 +44,7 @@ def main():
         raise ValueError('卸载版本不一致')
     if info['CFBundleVersion'] != metadata['product']['build_number']:
         raise ValueError('卸载构建号不一致')
-    if info['LSMinimumSystemVersion'] != metadata['product']['minimum_macos']:
+    if info['LSMinimumSystemVersion'] != minimum_macos(metadata, architecture):
         raise ValueError('卸载工具最低系统不一致')
     if info.get('CFBundleIconFile') != 'TapSayAudioUninstaller.icns':
         raise ValueError('卸载工具图标声明不一致')
@@ -76,7 +76,7 @@ def main():
         build_versions = subprocess.check_output(
             ['/usr/bin/xcrun', 'vtool', '-show-build', str(binary)], text=True
         )
-        if f"minos {metadata['product']['minimum_macos']}" not in build_versions:
+        if f"minos {minimum_macos(metadata, architecture)}" not in build_versions:
             raise ValueError(binary.name + ' 的最低系统不匹配')
     subprocess.run(
         ['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)],

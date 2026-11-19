@@ -7,6 +7,14 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 DISTRIBUTION_APPROVED_STATUS = 'approved for distribution'
+MINIMUM_MACOS = {'arm64': '14.0', 'x86_64': '13.0'}
+
+
+def minimum_macos(metadata, architecture):
+    mapping = metadata['product']['minimum_macos_by_architecture']
+    if mapping != MINIMUM_MACOS or architecture not in MINIMUM_MACOS:
+        raise ValueError('最低系统版本或架构无效')
+    return mapping[architecture]
 
 
 def load_product(path=None):
@@ -34,7 +42,7 @@ def load_product(path=None):
             raise ValueError('稳定驱动合同不匹配：' + key)
     if (p['name'] != 'TapSay Audio'
             or p['architectures'] != ['arm64', 'x86_64']
-            or p['minimum_macos'] != '14.0'):
+            or p['minimum_macos_by_architecture'] != MINIMUM_MACOS):
         raise ValueError('产品名称或平台合同不匹配')
     if u['bundle_identifier'] != 'com.leafney.tapsay.audio.uninstaller':
         raise ValueError('卸载入口标识不匹配')
@@ -70,7 +78,7 @@ def render_uninstaller(destination, metadata, native, architecture, *, icon_path
                 CFBundleIdentifier=metadata['uninstaller']['bundle_identifier'],
                 CFBundleExecutable='TapSayAudioUninstaller-' + architecture,
                 CFBundleIconFile=icon_name,
-                LSMinimumSystemVersion=metadata['product']['minimum_macos'])
+                LSMinimumSystemVersion=minimum_macos(metadata, architecture))
     info_path.write_bytes(plistlib.dumps(info))
     resources = destination / 'Contents/Resources'
     resources.mkdir(exist_ok=True)
