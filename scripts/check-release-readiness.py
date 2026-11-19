@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--dist', type=Path, default=ROOT / 'dist')
     parser.add_argument('--formal', action='store_true')
     args = parser.parse_args()
-    result = audit(args.dist, load_product(), formal=args.formal)
+    result = audit(args.dist, load_product(), formal=args.formal, allow_readiness_reports=True)
     code = exit_code(result, args.formal)
     state = '内容检查失败' if result['content_errors'] else '本地内容检查通过，正式发布条件待完成'
     lines = ['# 本地发行检查', '', state, '', '## 内容错误', '']

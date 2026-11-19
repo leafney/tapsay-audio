@@ -70,7 +70,8 @@ def check_source_archive(path, prefix, metadata, errors):
         errors.append('源码归档不可读：' + str(error))
 
 
-def audit(directory, metadata, run=command, formal=False, unverified=False):
+def audit(directory, metadata, run=command, formal=False, unverified=False,
+          allow_readiness_reports=False):
     if formal and unverified:
         raise ValueError('认证模式不能使用未认证文件名')
     directory = Path(directory)
@@ -81,7 +82,10 @@ def audit(directory, metadata, run=command, formal=False, unverified=False):
         prefix + '-x86_64' + ('-Unverified' if unverified else '') + '.dmg',
     ]
     errors, pending, rows = [], [], []
-    if {path.name for path in directory.iterdir()} != set(names) | {'SHA256SUMS.txt'}:
+    actual = {path.name for path in directory.iterdir()}
+    if allow_readiness_reports:
+        actual -= {'RELEASE-READINESS.md', 'RELEASE-STATUS.json'}
+    if actual != set(names) | {'SHA256SUMS.txt'}:
         errors.append('公开资产集合错误')
     checksums = {}
     try:
