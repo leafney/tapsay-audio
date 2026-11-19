@@ -26,7 +26,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify_single_architecture(directory, architecture, version):
+def verify_single_architecture(directory, architecture, version, signing_mode='developer-id'):
     directory = Path(directory)
     prefix = f'TapSayAudio-2ch-{version}-{architecture}'
     names = [prefix + '.dmg']
@@ -49,7 +49,7 @@ def verify_single_architecture(directory, architecture, version):
     subprocess.run([
         'python3', str(ROOT / 'scripts/check-dmg.py'),
         str(directory / names[0]), architecture,
-        '--signing-mode', 'developer-id',
+        '--signing-mode', signing_mode,
     ], check=True, cwd=ROOT)
 
 
@@ -83,7 +83,8 @@ def verify_formal_release(directory, metadata):
 
 
 def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
-             build_metadata=None, formal=False):
+             build_metadata=None, formal=False, signing_mode='developer-id'):
+    require(signing_mode in ('adhoc', 'developer-id'), '签名模式无效')
     require(re.fullmatch(VERSION_PATTERN, version) is not None, '版本格式无效')
     metadata = load_product()
     require(metadata['product']['version'] == version, '产品配置版本与发布版本不一致')
@@ -91,8 +92,8 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
             '最低系统参数与产品配置不一致')
     arm64_dir = Path(arm64_dir).absolute()
     x86_64_dir = Path(x86_64_dir).absolute()
-    verify_single_architecture(arm64_dir, 'arm64', version)
-    verify_single_architecture(x86_64_dir, 'x86_64', version)
+    verify_single_architecture(arm64_dir, 'arm64', version, signing_mode)
+    verify_single_architecture(x86_64_dir, 'x86_64', version, signing_mode)
 
     output = Path(output).absolute()
     require(output != ROOT and output not in ROOT.parents and not output.is_symlink(),
@@ -102,12 +103,12 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
             prefix='.tapsay-release-', dir=output.parent) as temporary:
         staged = Path(temporary) / 'release'
         staged.mkdir()
-        public_names = [
-            f'TapSayAudio-2ch-{version}-arm64.dmg',
-            f'TapSayAudio-2ch-{version}-x86_64.dmg',
-        ]
-        shutil.copy2(arm64_dir / public_names[0], staged / public_names[0])
-        shutil.copy2(x86_64_dir / public_names[1], staged / public_names[1])
+        public_names = []
+        for directory, architecture in ((arm64_dir, 'arm64'), (x86_64_dir, 'x86_64')):
+            prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+            name = prefix + ('-Unverified' if signing_mode == 'adhoc' else '') + '.dmg'
+            shutil.copy2(directory / (prefix + '.dmg'), staged / name)
+            public_names.append(name)
         build_source_archive(staged, build_metadata)
         source_name = f'TapSayAudio-2ch-{version}-source.tar.gz'
         public_names.append(source_name)
@@ -115,8 +116,14 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
         require({path.name for path in staged.iterdir()} == {
             *public_names, 'SHA256SUMS.txt',
         }, '公开目录包含未声明资产')
-        if formal:
+        if formal and signing_mode == 'developer-id':
             verify_formal_release(staged, metadata)
+        elif formal:
+            require(metadata['upstream']['source_import_status'] == DISTRIBUTION_APPROVED_STATUS,
+                    '第三方分发审查尚未完成')
+            result = audit(staged, metadata, unverified=True)
+            if exit_code(result):
+                raise ValueError('公开发布验证失败：' + '；'.join(result['content_errors']))
 
         spec = importlib.util.spec_from_file_location(
             'publish_artifacts', ROOT / 'scripts/publish-artifacts.py')
@@ -135,6 +142,7 @@ def main():
     parser.add_argument('--minimum-macos', required=True)
     parser.add_argument('--build-metadata', type=Path)
     parser.add_argument('--formal', action='store_true')
+    parser.add_argument('--signing-mode', choices=('adhoc', 'developer-id'), default='developer-id')
     args = parser.parse_args()
     assemble(
         args.arm64_dir,
@@ -144,6 +152,7 @@ def main():
         args.minimum_macos,
         args.build_metadata,
         args.formal,
+        args.signing_mode,
     )
     return 0
 

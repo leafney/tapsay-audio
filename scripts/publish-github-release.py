@@ -49,11 +49,14 @@ def release_state(tag, runner=None):
     return state
 
 
-def expected_assets(version, directory):
+def expected_assets(version, directory, signing_mode='developer-id'):
     directory = Path(directory)
+    if signing_mode not in ('adhoc', 'developer-id'):
+        raise ReleaseError('签名模式无效')
+    suffix = '-Unverified' if signing_mode == 'adhoc' else ''
     names = [
-        f'TapSayAudio-2ch-{version}-arm64.dmg',
-        f'TapSayAudio-2ch-{version}-x86_64.dmg',
+        f'TapSayAudio-2ch-{version}-arm64{suffix}.dmg',
+        f'TapSayAudio-2ch-{version}-x86_64{suffix}.dmg',
         f'TapSayAudio-2ch-{version}-source.tar.gz',
         'SHA256SUMS.txt',
     ]
@@ -94,13 +97,13 @@ def cleanup_draft(tag, runner=None):
         print('清理 Draft Release 失败：' + message, file=sys.stderr)
 
 
-def publish_release(tag, version, directory, runner=None):
+def publish_release(tag, version, directory, runner=None, signing_mode='developer-id'):
     if re.fullmatch(r'v' + VERSION_PATTERN, tag) is None:
         raise ReleaseError('发布标签格式无效')
     if tag[1:] != version or re.fullmatch(VERSION_PATTERN, version) is None:
         raise ReleaseError('发布标签与版本不一致')
 
-    paths, expected_sizes = expected_assets(version, directory)
+    paths, expected_sizes = expected_assets(version, directory, signing_mode)
     if release_state(tag, runner) is not None:
         raise ReleaseError('同名 Release 已存在')
 
@@ -112,6 +115,8 @@ def publish_release(tag, version, directory, runner=None):
             '--draft',
             '--title', 'TapSay Audio ' + version,
             '--generate-notes',
+            '--notes', ('未经过苹果开发者签名及公证，macOS 可能阻止打开。'
+                        if signing_mode == 'adhoc' else '已通过开发者签名及苹果公证验证。'),
         ], runner)
         require_success(created, '创建 Draft Release')
         created_draft = True
@@ -152,8 +157,9 @@ def main():
     parser.add_argument('--tag', required=True)
     parser.add_argument('--version', required=True)
     parser.add_argument('--directory', required=True, type=Path)
+    parser.add_argument('--signing-mode', choices=('adhoc', 'developer-id'), default='developer-id')
     args = parser.parse_args()
-    publish_release(args.tag, args.version, args.directory)
+    publish_release(args.tag, args.version, args.directory, signing_mode=args.signing_mode)
     return 0
 
 

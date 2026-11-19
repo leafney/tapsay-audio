@@ -70,13 +70,15 @@ def check_source_archive(path, prefix, metadata, errors):
         errors.append('源码归档不可读：' + str(error))
 
 
-def audit(directory, metadata, run=command, formal=False):
+def audit(directory, metadata, run=command, formal=False, unverified=False):
+    if formal and unverified:
+        raise ValueError('认证模式不能使用未认证文件名')
     directory = Path(directory)
     version = metadata['product']['version']
     prefix = 'TapSayAudio-2ch-' + version
     names = [
-        prefix + '-arm64.dmg',
-        prefix + '-x86_64.dmg',
+        prefix + '-arm64' + ('-Unverified' if unverified else '') + '.dmg',
+        prefix + '-x86_64' + ('-Unverified' if unverified else '') + '.dmg',
         prefix + '-source.tar.gz',
     ]
     errors, pending, rows = [], [], []
@@ -117,6 +119,8 @@ def audit(directory, metadata, run=command, formal=False):
             ]
             if formal:
                 command.extend(['--signing-mode', 'developer-id'])
+            if unverified:
+                command.append('--unverified-name')
             result = run(command)
             if result.returncode != 0:
                 errors.append(name + ' 的内容或架构检查失败')

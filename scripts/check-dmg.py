@@ -28,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('image', type=Path)
     parser.add_argument('architecture', choices=('arm64', 'x86_64'))
+    parser.add_argument('--unverified-name', action='store_true')
     parser.add_argument(
         '--signing-mode',
         choices=('adhoc', 'developer-id'),
@@ -42,7 +43,9 @@ def main():
 
     version = metadata['product']['version']
     prefix = f'TapSayAudio-2ch-{version}-{architecture}'
-    if image.name != prefix + '.dmg':
+    if args.unverified_name and args.signing_mode != 'adhoc':
+        raise ValueError('未认证文件名仅适用于未认证模式')
+    if image.name != prefix + ('-Unverified' if args.unverified_name else '') + '.dmg':
         raise ValueError('DMG 文件名与版本或架构不一致')
     if not image.is_file() or image.stat().st_size == 0:
         raise ValueError('DMG 不存在或为空')

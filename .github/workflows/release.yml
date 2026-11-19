@@ -131,6 +131,7 @@ jobs:
             --version "$RELEASE_VERSION" \
             --minimum-macos 14.0 \
             --build-metadata .build/build-metadata.json \
+            --signing-mode "${{ needs.prepare.outputs.signing_mode }}" \
             --formal
 
       - name: Publish GitHub Pre-release
@@ -143,4 +144,5 @@ jobs:
           python3 scripts/publish-github-release.py \
             --tag "$RELEASE_TAG" \
             --version "$RELEASE_VERSION" \
+            --signing-mode "${{ needs.prepare.outputs.signing_mode }}" \
             --directory "$RUNNER_TEMP/public-release"
