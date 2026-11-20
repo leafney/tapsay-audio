@@ -37,14 +37,14 @@ TapSay Audio 可独立安装和卸载，也能与 `MiRemoteV 2ch`、`BlackHole 2
 | --- | --- |
 | 操作系统 | Apple Silicon：macOS 14 及以上；Intel：macOS 13 及以上（macOS 13 真机待验证） |
 | Apple Silicon | 提供 arm64 安装包 |
-| Intel | 提供 x86_64 安装包 |
+| Intel | 提供 amd64 安装包（实际架构为 x86_64） |
 | 签名与公证 | 后续正式发布将完成 Apple Developer ID 签名与公证 |
 
 实际发布版本、可用架构及签名状态以 [GitHub Releases](https://github.com/leafney/tapsay-audio/releases) 页面为准。
 
 ## 安装方法
 
-1. 打开 [TapSay Audio Releases](https://github.com/leafney/tapsay-audio/releases)，根据 Mac 芯片下载 arm64 或 x86_64 的 `.dmg` 文件。
+1. 打开 [TapSay Audio Releases](https://github.com/leafney/tapsay-audio/releases)，根据 Mac 芯片下载 arm64 或 amd64 的 `.dmg` 文件。
 2. 打开 DMG，双击其中的 `.pkg` 安装包。
 3. 完成管理员授权，等待安装和声卡注册完成。
 4. 如果系统要求重启，请保存工作，再重新启动 Mac。

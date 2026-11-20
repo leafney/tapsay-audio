@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 
-from product import ROOT, load_product, minimum_macos
+from product import ROOT, load_product, minimum_macos, package_architecture
 
 
 def verify_image(image):
@@ -42,7 +42,7 @@ def main():
         raise ValueError('目标架构不在产品配置中：' + architecture)
 
     version = metadata['product']['version']
-    prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+    prefix = f'TapSayAudio-2ch-{version}-{package_architecture(architecture)}'
     if args.unverified_name and args.signing_mode != 'adhoc':
         raise ValueError('未认证文件名仅适用于未认证模式')
     if image.name != prefix + ('-Unverified' if args.unverified_name else '') + '.dmg':

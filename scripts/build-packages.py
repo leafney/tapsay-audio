@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import tempfile
 
-from product import ROOT, load_product, render_uninstaller, minimum_macos
+from product import ROOT, load_product, render_uninstaller, minimum_macos, package_architecture
 
 ARCHITECTURES = ('arm64', 'x86_64')
 DEVELOPER_ID_ENVIRONMENT = (
@@ -218,7 +218,7 @@ def build(architecture, output, signing_mode='adhoc'):
                  '--build-result', str(result_path)])
 
             version = metadata['product']['version']
-            prefix = 'TapSayAudio-2ch-' + version + '-' + architecture
+            prefix = 'TapSayAudio-2ch-' + version + '-' + package_architecture(architecture)
             scripts, empty, image_root = work / 'scripts', work / 'empty', work / 'image'
             scripts.mkdir()
             empty.mkdir()

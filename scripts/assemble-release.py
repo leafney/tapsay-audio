@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 
-from product import DISTRIBUTION_APPROVED_STATUS, ROOT, load_product
+from product import DISTRIBUTION_APPROVED_STATUS, ROOT, load_product, package_architecture
 from release_checks import audit, exit_code
 
 VERSION_PATTERN = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
@@ -27,7 +27,7 @@ def digest(path):
 
 def verify_single_architecture(directory, architecture, version, signing_mode='developer-id'):
     directory = Path(directory)
-    prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+    prefix = f'TapSayAudio-2ch-{version}-{package_architecture(architecture)}'
     names = [prefix + '.dmg']
     for name in names:
         path = directory / name
@@ -94,7 +94,7 @@ def assemble(arm64_dir, x86_64_dir, output, version, minimum_macos,
         staged.mkdir()
         public_names = []
         for directory, architecture in ((arm64_dir, 'arm64'), (x86_64_dir, 'x86_64')):
-            prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+            prefix = f'TapSayAudio-2ch-{version}-{package_architecture(architecture)}'
             name = prefix + ('-Unverified' if signing_mode == 'adhoc' else '') + '.dmg'
             shutil.copy2(directory / (prefix + '.dmg'), staged / name)
             public_names.append(name)

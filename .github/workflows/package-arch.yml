@@ -232,7 +232,7 @@ jobs:
       - name: Upload architecture artifact
         uses: actions/upload-artifact@v7
         with:
-          name: TapSayAudio-2ch-${{ inputs.version }}-${{ inputs.architecture }}-build-${{ inputs.build_number }}
+          name: TapSayAudio-2ch-${{ inputs.version }}-${{ inputs.architecture == 'x86_64' && 'amd64' || inputs.architecture }}-build-${{ inputs.build_number }}
           path: |
             ${{ runner.temp }}/tapsay-audio-artifact/*.dmg
             ${{ runner.temp }}/tapsay-audio-artifact/SHA256SUMS.txt

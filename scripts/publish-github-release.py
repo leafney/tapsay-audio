@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from release_notes import release_notes, verify_source_snapshot
+from product import package_architecture
 
 VERSION_PATTERN = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 
@@ -56,8 +57,8 @@ def expected_assets(version, directory, signing_mode='developer-id'):
         raise ReleaseError('签名模式无效')
     suffix = '-Unverified' if signing_mode == 'adhoc' else ''
     names = [
-        f'TapSayAudio-2ch-{version}-arm64{suffix}.dmg',
-        f'TapSayAudio-2ch-{version}-x86_64{suffix}.dmg',
+        *(f'TapSayAudio-2ch-{version}-{package_architecture(arch)}{suffix}.dmg'
+          for arch in ('arm64', 'x86_64')),
         'SHA256SUMS.txt',
     ]
     actual = {

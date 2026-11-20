@@ -16,7 +16,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from product import load_product, render_uninstaller, minimum_macos
+from product import load_product, render_uninstaller, minimum_macos, package_architecture
 from release_checks import audit, exit_code
 
 spec = importlib.util.spec_from_file_location('publisher', ROOT / 'scripts/publish-artifacts.py')
@@ -45,6 +45,41 @@ build_packages_spec.loader.exec_module(build_packages)
 
 
 class ReleaseToolsTests(unittest.TestCase):
+    def test_package_architecture_names(self):
+        self.assertEqual(package_architecture('arm64'), 'arm64')
+        self.assertEqual(package_architecture('x86_64'), 'amd64')
+        with self.assertRaises(ValueError):
+            package_architecture('amd64')
+
+    def test_old_intel_filename_is_rejected(self):
+        with tempfile.TemporaryDirectory() as t:
+            directory = Path(t)
+            old_name = 'TapSayAudio-2ch-1.2.3-x86_64.dmg'
+            (directory / old_name).write_bytes(b'old')
+            (directory / 'SHA256SUMS.txt').write_text(
+                hashlib.sha256(b'old').hexdigest() + '  ' + old_name + '\n')
+            with self.assertRaises(ValueError):
+                assemble_release.verify_single_architecture(directory, 'x86_64', '1.2.3', 'adhoc')
+
+    def test_intel_package_uses_amd64_name_and_x86_architecture(self):
+        with tempfile.TemporaryDirectory() as t:
+            directory = Path(t)
+            name = 'TapSayAudio-2ch-1.2.3-amd64.dmg'
+            (directory / name).write_bytes(b'image')
+            (directory / 'SHA256SUMS.txt').write_text(
+                hashlib.sha256(b'image').hexdigest() + '  ' + name + '\n')
+            with mock.patch.object(assemble_release.subprocess, 'run') as run:
+                assemble_release.verify_single_architecture(directory, 'x86_64', '1.2.3', 'adhoc')
+            self.assertIn('x86_64', run.call_args.args[0])
+            self.assertIn(str(directory / name), run.call_args.args[0])
+
+    def test_workflows_use_same_intel_artifact_name(self):
+        shared = (ROOT / '.github/workflows/package-arch.yml').read_text()
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertIn("inputs.architecture == 'x86_64' && 'amd64' || inputs.architecture", shared)
+        self.assertIn('-amd64-build-${{ github.run_number }}', release)
+        self.assertIn('architecture: x86_64', release)
+
     def test_minimum_system_versions_by_architecture(self):
         metadata = load_product()
         self.assertEqual(minimum_macos(metadata, 'arm64'), '14.0')
@@ -74,7 +109,7 @@ class ReleaseToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             directory = Path(t)
             names = ('TapSayAudio-2ch-1.2.3-arm64-Unverified.dmg',
-                     'TapSayAudio-2ch-1.2.3-x86_64-Unverified.dmg',
+                     'TapSayAudio-2ch-1.2.3-amd64-Unverified.dmg',
                      'SHA256SUMS.txt')
             for name in names:
                 (directory / name).write_bytes(b'x')
@@ -91,7 +126,7 @@ class ReleaseToolsTests(unittest.TestCase):
             for arch in ('arm64', 'x86_64'):
                 directory = base / arch
                 directory.mkdir()
-                name = f'TapSayAudio-2ch-{version}-{arch}.dmg'
+                name = f'TapSayAudio-2ch-{version}-{package_architecture(arch)}.dmg'
                 (directory / name).write_bytes(arch.encode())
                 (directory / 'SHA256SUMS.txt').write_text(
                     hashlib.sha256(arch.encode()).hexdigest() + '  ' + name + '\n')
@@ -107,7 +142,7 @@ class ReleaseToolsTests(unittest.TestCase):
             self.assertTrue(audit_mock.call_args.kwargs['unverified'])
             names = {path.name for path in (base / 'out').iterdir()}
             self.assertIn(f'TapSayAudio-2ch-{version}-arm64-Unverified.dmg', names)
-            self.assertIn(f'TapSayAudio-2ch-{version}-x86_64-Unverified.dmg', names)
+            self.assertIn(f'TapSayAudio-2ch-{version}-amd64-Unverified.dmg', names)
 
     def test_version_and_rendering(self):
         with tempfile.TemporaryDirectory() as t:
@@ -325,7 +360,7 @@ class ReleaseToolsTests(unittest.TestCase):
             metadata = load_product()
             version = metadata['product']['version']
             for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
-                prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+                prefix = f'TapSayAudio-2ch-{version}-{package_architecture(architecture)}'
                 names = [prefix + '.dmg']
                 for name in names:
                     (directory / name).write_bytes(architecture.encode() + b'-' + name.encode())
@@ -339,7 +374,7 @@ class ReleaseToolsTests(unittest.TestCase):
 
             public_names = {
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
-                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-amd64.dmg',
                 'SHA256SUMS.txt',
             }
             self.assertEqual({path.name for path in output.iterdir()}, public_names)
@@ -368,7 +403,7 @@ class ReleaseToolsTests(unittest.TestCase):
             metadata = load_product()
             version = metadata['product']['version']
             for directory, architecture in ((arm64, 'arm64'), (x86_64, 'x86_64')):
-                prefix = f'TapSayAudio-2ch-{version}-{architecture}'
+                prefix = f'TapSayAudio-2ch-{version}-{package_architecture(architecture)}'
                 (directory / (prefix + '.dmg')).write_bytes(b'asset')
                 (directory / 'SHA256SUMS.txt').write_text(
                     hashlib.sha256(b'asset').hexdigest() + '  ' + prefix + '.dmg\n')
@@ -497,7 +532,7 @@ class ReleaseToolsTests(unittest.TestCase):
             version = '9.9.9'
             names = [
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
-                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-amd64.dmg',
                 'SHA256SUMS.txt',
             ]
             for index, name in enumerate(names):
@@ -556,7 +591,7 @@ class ReleaseToolsTests(unittest.TestCase):
             version = '9.9.9'
             for name in (
                 f'TapSayAudio-2ch-{version}-arm64.dmg',
-                f'TapSayAudio-2ch-{version}-x86_64.dmg',
+                f'TapSayAudio-2ch-{version}-amd64.dmg',
                 'SHA256SUMS.txt',
             ):
                 (directory / name).write_bytes(name.encode())
@@ -598,11 +633,11 @@ class ReleaseToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             base = Path(t)
             metadata = load_product(); prefix = 'TapSayAudio-2ch-' + metadata['product']['version']
-            for suffix in ['-arm64.dmg', '-x86_64.dmg']:
+            for suffix in ['-arm64.dmg', '-amd64.dmg']:
                 (base / (prefix + suffix)).write_bytes(b'fixture')
             names = [
                 prefix + '-arm64.dmg',
-                prefix + '-x86_64.dmg',
+                prefix + '-amd64.dmg',
             ]
             sums = ''.join(hashlib.sha256((base/n).read_bytes()).hexdigest()+'  '+n+'\n' for n in names)
             (base / 'SHA256SUMS.txt').write_text(sums)

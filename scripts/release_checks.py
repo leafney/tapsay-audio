@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tarfile
+from product import package_architecture
 
 
 def command(arguments):
@@ -78,8 +79,8 @@ def audit(directory, metadata, run=command, formal=False, unverified=False,
     version = metadata['product']['version']
     prefix = 'TapSayAudio-2ch-' + version
     names = [
-        prefix + '-arm64' + ('-Unverified' if unverified else '') + '.dmg',
-        prefix + '-x86_64' + ('-Unverified' if unverified else '') + '.dmg',
+        *(prefix + '-' + package_architecture(arch) + ('-Unverified' if unverified else '') + '.dmg'
+          for arch in ('arm64', 'x86_64')),
     ]
     errors, pending, rows = [], [], []
     actual = {path.name for path in directory.iterdir()}

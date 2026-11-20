@@ -10,6 +10,13 @@ DISTRIBUTION_APPROVED_STATUS = 'approved for distribution'
 MINIMUM_MACOS = {'arm64': '14.0', 'x86_64': '13.0'}
 
 
+def package_architecture(architecture):
+    names = {'arm64': 'arm64', 'x86_64': 'amd64'}
+    if architecture not in names:
+        raise ValueError('安装包架构无效：' + str(architecture))
+    return names[architecture]
+
+
 def minimum_macos(metadata, architecture):
     mapping = metadata['product']['minimum_macos_by_architecture']
     if mapping != MINIMUM_MACOS or architecture not in MINIMUM_MACOS:
